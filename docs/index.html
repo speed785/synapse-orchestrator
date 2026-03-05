@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Synapse Orchestrator — Parallel Tool Execution</title>
+  <meta name="description" content="Auto-detect dependencies between AI agent tool calls and execute with maximum parallelism.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0a; --bg-card: #0f0f0f; --bg-elevated: #111111;
+      --border: #1a1a1a; --border-hover: #2a2a2a;
+      --text: #e0e0e0; --text-dim: #666666; --text-muted: #444444;
+      --accent: #00d4ff; --accent-dim: rgba(0,212,255,0.08);
+      --green: #00ff88; --cyan: #00d4ff;
+      --font-mono: 'JetBrains Mono', monospace;
+      --font-body: 'IBM Plex Sans', sans-serif;
+    }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    html { scroll-behavior:smooth; -webkit-font-smoothing:antialiased; }
+    body { font-family:var(--font-body); background:var(--bg); color:var(--text); line-height:1.6; }
+    a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:underline; }
+    code, pre { font-family:var(--font-mono); }
+    .container { max-width:860px; margin:0 auto; padding:0 2rem; }
+    .nav { position:sticky; top:0; z-index:100; padding:0 2rem; backdrop-filter:blur(12px); background:rgba(10,10,10,0.85); border-bottom:1px solid var(--border); }
+    .nav-inner { max-width:860px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; height:56px; }
+    .nav-brand { font-family:var(--font-mono); font-size:0.95rem; font-weight:600; color:var(--text); }
+    .nav-brand .accent { color:var(--accent); }
+    .nav-links { display:flex; gap:1.5rem; }
+    .nav-links a { font-family:var(--font-mono); font-size:0.78rem; color:var(--text-dim); }
+    .nav-links a:hover { color:var(--accent); text-decoration:none; }
+    .hero { padding:5rem 0 3rem; border-bottom:1px solid var(--border); }
+    .hero-icon { width:80px; height:80px; border-radius:14px; margin-bottom:1.5rem; }
+    .hero h1 { font-family:var(--font-mono); font-size:2.2rem; font-weight:700; letter-spacing:-0.03em; margin-bottom:0.5rem; }
+    .hero .tagline { font-size:1.1rem; color:var(--text-dim); margin-bottom:2rem; }
+    .hero-badges { display:flex; gap:0.5rem; flex-wrap:wrap; }
+    .badge { font-family:var(--font-mono); font-size:0.72rem; padding:0.3rem 0.8rem; border:1px solid var(--border); border-radius:100px; color:var(--text-dim); }
+    .install { padding:3rem 0; border-bottom:1px solid var(--border); }
+    .install h2 { font-family:var(--font-mono); font-size:1.3rem; margin-bottom:1.5rem; color:var(--accent); }
+    .install-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+    @media(max-width:600px) { .install-grid { grid-template-columns:1fr; } }
+    .install-block h3 { font-family:var(--font-mono); font-size:0.85rem; color:var(--text-dim); margin-bottom:0.5rem; }
+    pre { background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:1rem 1.2rem; overflow-x:auto; font-size:0.82rem; line-height:1.7; }
+    pre .prompt { color:var(--accent); user-select:none; }
+    pre .cmd { color:var(--green); }
+    pre .comment { color:var(--text-muted); }
+    .doc-section { padding:3rem 0; border-bottom:1px solid var(--border); }
+    .doc-section:last-of-type { border-bottom:none; }
+    .doc-section h2 { font-family:var(--font-mono); font-size:1.3rem; margin-bottom:1.5rem; color:var(--accent); }
+    .doc-section h3 { font-family:var(--font-mono); font-size:1rem; margin:1.5rem 0 0.75rem; color:var(--text); }
+    .doc-section p { color:var(--text-dim); margin-bottom:1rem; font-size:0.95rem; }
+    .doc-section ul { margin-bottom:1rem; padding-left:0; list-style:none; }
+    .doc-section li { font-size:0.9rem; color:var(--text-dim); padding:0.25rem 0 0.25rem 1.2rem; position:relative; }
+    .doc-section li::before { content:'>'; position:absolute; left:0; font-family:var(--font-mono); color:var(--accent); font-size:0.8rem; }
+    .api-table { width:100%; border-collapse:collapse; margin:1rem 0; font-size:0.85rem; }
+    .api-table th { text-align:left; font-family:var(--font-mono); font-weight:600; padding:0.6rem 1rem; border-bottom:2px solid var(--border); color:var(--text); font-size:0.78rem; text-transform:uppercase; letter-spacing:0.06em; }
+    .api-table td { padding:0.6rem 1rem; border-bottom:1px solid var(--border); vertical-align:top; }
+    .api-table td:first-child { font-family:var(--font-mono); color:var(--green); white-space:nowrap; font-size:0.82rem; }
+    .api-table td:last-child { color:var(--text-dim); }
+    .api-table tr:hover { background:rgba(255,255,255,0.02); }
+    .bench-table { width:100%; border-collapse:collapse; margin:1rem 0; font-size:0.82rem; }
+    .bench-table th { text-align:left; font-family:var(--font-mono); font-weight:600; padding:0.5rem 0.8rem; border-bottom:2px solid var(--border); color:var(--text); font-size:0.75rem; text-transform:uppercase; }
+    .bench-table td { padding:0.5rem 0.8rem; border-bottom:1px solid var(--border); color:var(--text-dim); font-family:var(--font-mono); font-size:0.8rem; }
+    .bench-table td:last-child { color:var(--green); font-weight:600; }
+    .bench-table tr:hover { background:rgba(255,255,255,0.02); }
+    .dag-block { background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:1.2rem 1.4rem; font-family:var(--font-mono); font-size:0.8rem; line-height:1.6; color:var(--text-dim); margin:1rem 0; white-space:pre; overflow-x:auto; }
+    .dag-block .node { color:var(--cyan); }
+    .dag-block .arrow { color:var(--green); }
+    .footer { padding:3rem 0; text-align:center; border-top:1px solid var(--border); }
+    .footer p { font-size:0.82rem; color:var(--text-muted); }
+    .footer a { color:var(--accent); }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="https://speed785.github.io" class="nav-brand"><span class="accent">[</span>speed785<span class="accent">]</span> / synapse-orchestrator</a>
+      <div class="nav-links">
+        <a href="#install">Install</a>
+        <a href="#usage">Usage</a>
+        <a href="#api">API</a>
+        <a href="https://github.com/speed785/synapse-orchestrator">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <section class="hero">
+      <svg class="hero-icon" viewBox="0 0 512 512" width="80" height="80">
+        <defs><radialGradient id="so-bg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#141414"/><stop offset="100%" stop-color="#0a0a0a"/></radialGradient><filter id="so-g"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+        <rect width="512" height="512" rx="64" fill="url(#so-bg)"/>
+        <g fill="none" stroke-width="2" opacity="0.6"><path d="M120 180 C170 180 190 140 224 140" stroke="#00ff88"/><path d="M120 256 C170 256 190 216 224 216" stroke="#00ff88"/><path d="M120 256 C170 256 190 296 224 296" stroke="#00ff88"/><path d="M120 332 C170 332 190 372 224 372" stroke="#00ff88"/><path d="M280 140 C310 140 330 200 360 220" stroke="#00d4ff"/><path d="M280 216 C310 216 330 220 360 235" stroke="#00d4ff"/><path d="M280 296 C310 296 330 260 360 250" stroke="#00d4ff"/><path d="M280 372 C310 372 330 280 360 260" stroke="#00d4ff"/></g>
+        <g filter="url(#so-g)"><circle cx="100" cy="180" r="16" fill="#0d1a1a" stroke="#00d4ff" stroke-width="2.5"/><circle cx="100" cy="256" r="18" fill="#0d1a1a" stroke="#00d4ff" stroke-width="2.5"/><circle cx="100" cy="332" r="16" fill="#0d1a1a" stroke="#00d4ff" stroke-width="2.5"/><circle cx="252" cy="140" r="15" fill="#0d1a1a" stroke="#00ff88" stroke-width="2.5"/><circle cx="252" cy="216" r="15" fill="#0d1a1a" stroke="#00ff88" stroke-width="2.5"/><circle cx="252" cy="296" r="15" fill="#0d1a1a" stroke="#00ff88" stroke-width="2.5"/><circle cx="252" cy="372" r="15" fill="#0d1a1a" stroke="#00ff88" stroke-width="2.5"/><circle cx="384" cy="245" r="20" fill="#0d1a1a" stroke="#00d4ff" stroke-width="3"/></g>
+      </svg>
+      <h1>synapse-orchestrator</h1>
+      <p class="tagline">Parallel tool execution &mdash; auto-detect dependencies, maximize speed</p>
+      <div class="hero-badges">
+        <span class="badge">Python 3.10+</span>
+        <span class="badge">TypeScript 5+</span>
+        <span class="badge">MIT License</span>
+        <span class="badge">3-10x Speedup</span>
+      </div>
+    </section>
+
+    <section class="doc-section">
+      <p>Modern AI agents orchestrate dozens of tool calls per request. A naive implementation runs them sequentially. <strong>Synapse</strong> analyses the calls, builds a dependency DAG, and fires independent ones in parallel &mdash; dramatically cutting pipeline latency.</p>
+      <div class="dag-block"><span class="node">fetch_wikipedia</span> <span class="arrow">--+</span>
+<span class="node">fetch_arxiv</span>     <span class="arrow">--+</span>
+<span class="node">fetch_github</span>    <span class="arrow">--+--> </span><span class="node">aggregate</span> <span class="arrow">--></span> <span class="node">format_report</span>
+<span class="node">fetch_news</span>      <span class="arrow">--+</span>
+<span class="node">fetch_patents</span>   <span class="arrow">--+</span>
+
+Stage 0 (5 calls in parallel)  <span class="arrow">-></span>  200 ms
+Stage 1 (1 call)                <span class="arrow">-></span>  100 ms
+Stage 2 (1 call)                <span class="arrow">-></span>   50 ms
+Wall clock: 350 ms   vs   1150 ms sequential   <span class="arrow">=></span>   <span style="color:#00ff88">3.3x speedup</span></div>
+    </section>
+
+    <section class="install" id="install">
+      <h2># Install</h2>
+      <div class="install-grid">
+        <div class="install-block">
+          <h3>Python</h3>
+          <pre><span class="prompt">$</span> pip install synapse-orchestrator
+<span class="comment"># With provider extras:</span>
+<span class="prompt">$</span> pip install synapse-orchestrator[openai]
+<span class="prompt">$</span> pip install synapse-orchestrator[anthropic]</pre>
+        </div>
+        <div class="install-block">
+          <h3>TypeScript / Node.js</h3>
+          <pre><span class="prompt">$</span> npm install synapse-orchestrator</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" id="usage">
+      <h2># Quick Start</h2>
+
+      <h3>Python</h3>
+      <pre>import asyncio
+from synapse import Orchestrator, ToolCall
+
+async def main():
+    orch = Orchestrator(tools={
+        "fetch_user":    fetch_user,
+        "fetch_catalog": fetch_catalog,
+        "build_cart":    build_cart,
+        "send_receipt":  send_receipt,
+    })
+
+    <span class="comment"># $results.&lt;id&gt; references tell Synapse about data dependencies.</span>
+    <span class="comment"># Independent calls run in parallel automatically.</span>
+    report = await orch.run([
+        ToolCall(id="user",    name="fetch_user",    inputs={"user_id": 42}),
+        ToolCall(id="catalog", name="fetch_catalog", inputs={"category": "widgets"}),
+        ToolCall(id="cart",    name="build_cart",
+                 inputs={"user": "$results.user", "catalog": "$results.catalog"}),
+        ToolCall(id="receipt", name="send_receipt",
+                 inputs={"cart": "$results.cart"}),
+    ])
+
+    print(report)
+    <span class="comment"># Wall clock: 312 ms | Stages: 3 | Speedup: 1.46x</span>
+
+asyncio.run(main())</pre>
+
+      <h3>TypeScript</h3>
+      <pre>import { Orchestrator, ToolCall } from "synapse-orchestrator";
+
+const orch = new Orchestrator({
+  tools: { fetchUser, fetchCatalog, buildCart, sendReceipt },
+});
+
+const report = await orch.run([
+  { id: "user",    name: "fetchUser",    inputs: { userId: 42 } },
+  { id: "catalog", name: "fetchCatalog", inputs: { category: "widgets" } },
+  { id: "cart",    name: "buildCart",
+    inputs: { user: "$results.user", catalog: "$results.catalog" } },
+  { id: "receipt", name: "sendReceipt",
+    inputs: { cart: "$results.cart" } },
+]);
+
+console.log(`Speedup: ${report.speedupEstimate.toFixed(2)}x`);</pre>
+    </section>
+
+    <section class="doc-section" id="api">
+      <h2># API Reference</h2>
+
+      <h3>Orchestrator</h3>
+      <table class="api-table">
+        <thead><tr><th>Method</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>analyze(calls)</td><td>Build dependency graph without executing</td></tr>
+          <tr><td>plan(calls)</td><td>Build execution plan (staged DAG) without executing</td></tr>
+          <tr><td>run(calls)</td><td>Full pipeline: analyze > plan > execute. Returns ExecutionReport</td></tr>
+          <tr><td>run_raw(dicts)</td><td>Same as run but accepts plain dicts</td></tr>
+        </tbody>
+      </table>
+
+      <h3>ToolCall</h3>
+      <table class="api-table">
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>id</td><td>str</td><td>Unique id within the plan</td></tr>
+          <tr><td>name</td><td>str</td><td>Name of the registered tool function</td></tr>
+          <tr><td>inputs</td><td>dict</td><td>Arguments passed to the tool. May contain $results.* refs</td></tr>
+          <tr><td>depends_on</td><td>list[str]</td><td>Explicit dependency ids</td></tr>
+          <tr><td>timeout</td><td>float</td><td>Per-call timeout in seconds</td></tr>
+          <tr><td>retries</td><td>int</td><td>Number of retries on failure</td></tr>
+        </tbody>
+      </table>
+
+      <h2># Benchmarks</h2>
+      <table class="bench-table">
+        <thead><tr><th>Pipeline Shape</th><th>Sequential</th><th>Synapse</th><th>Speedup</th></tr></thead>
+        <tbody>
+          <tr><td>2 independent > 1 > 1</td><td>450 ms</td><td>310 ms</td><td>1.45x</td></tr>
+          <tr><td>5-way fan-out > aggregate > format</td><td>1150 ms</td><td>355 ms</td><td>3.24x</td></tr>
+          <tr><td>10-way fan-out > 2 reduce > 1 merge</td><td>2250 ms</td><td>460 ms</td><td>4.89x</td></tr>
+          <tr><td>Chain of 6 (no parallelism)</td><td>900 ms</td><td>905 ms</td><td>1.00x</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="doc-section">
+      <h2># Key Features</h2>
+      <ul>
+        <li>Automatic dependency DAG analysis via $results.* references</li>
+        <li>BFS staged execution plan for maximum parallelism</li>
+        <li>3-10x speedup on fan-out pipelines</li>
+        <li>Per-call timeout and retry support</li>
+        <li>OpenAI &amp; Anthropic function-calling integrations</li>
+        <li>~5ms overhead on purely sequential pipelines</li>
+        <li>Execution reports with wall clock, stages, and speedup metrics</li>
+      </ul>
+    </section>
+  </div>
+
+  <footer class="footer">
+    <div class="container">
+      <p><a href="https://speed785.github.io">speed785.github.io</a> &middot; <a href="https://github.com/speed785/synapse-orchestrator">GitHub</a> &middot; MIT License</p>
+    </div>
+  </footer>
+
+</body>
+</html>
