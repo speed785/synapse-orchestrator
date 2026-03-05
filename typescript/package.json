@@ -1,0 +1,65 @@
+{
+  "name": "synapse-orchestrator",
+  "version": "0.1.0",
+  "description": "Parallel tool call orchestrator for AI agents — auto-detect dependencies, maximise concurrency.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./integrations/openai": {
+      "import": "./dist/integrations/openai.js",
+      "types": "./dist/integrations/openai.d.ts"
+    },
+    "./integrations/anthropic": {
+      "import": "./dist/integrations/anthropic.js",
+      "types": "./dist/integrations/anthropic.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "lint": "eslint src --ext .ts"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "keywords": [
+    "ai",
+    "agents",
+    "llm",
+    "tool-calls",
+    "parallel",
+    "orchestration",
+    "asyncio",
+    "openai",
+    "anthropic",
+    "dag"
+  ],
+  "author": "Synapse Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/speed785/synapse-orchestrator"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  },
+  "peerDependencies": {
+    "openai": ">=1.0.0",
+    "@anthropic-ai/sdk": ">=0.25.0"
+  },
+  "peerDependenciesMeta": {
+    "openai": { "optional": true },
+    "@anthropic-ai/sdk": { "optional": true }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
