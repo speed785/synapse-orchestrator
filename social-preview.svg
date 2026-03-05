@@ -1,0 +1,171 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1a1a1a" stroke-width="0.5"/>
+    </pattern>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="nodeGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <radialGradient id="iconGlow" cx="256" cy="320" r="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.18"/>
+      <stop offset="50%" stop-color="#00d4ff" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="noise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.04"/>
+      </feComponentTransfer>
+      <feBlend in="SourceGraphic" mode="overlay"/>
+    </filter>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 8 3 L 0 6" fill="none" stroke="#00d4ff" stroke-width="1"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="640" fill="#0d0d0d"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+
+  <!-- Ambient glow -->
+  <ellipse cx="256" cy="320" rx="320" ry="300" fill="url(#iconGlow)"/>
+
+  <!-- Top/bottom accents -->
+  <rect x="0" y="0" width="1280" height="2" fill="#00d4ff" opacity="0.5"/>
+  <rect x="0" y="638" width="1280" height="2" fill="#00d4ff" opacity="0.12"/>
+
+  <!-- === LEFT: Parallel DAG nodes === -->
+
+  <!-- DAG Edges (connections) -->
+  <g stroke="#00d4ff" stroke-width="1.5" fill="none" opacity="0.3" marker-end="url(#arrow)">
+    <!-- From start node to parallel layer -->
+    <path d="M 168 310 L 225 240"/>
+    <path d="M 168 320 L 225 320"/>
+    <path d="M 168 330 L 225 400"/>
+  </g>
+
+  <!-- Parallel execution arrows -->
+  <g stroke="#00d4ff" stroke-width="1.5" fill="none" opacity="0.3" marker-end="url(#arrow)">
+    <!-- From parallel to merge -->
+    <path d="M 295 240 L 345 300"/>
+    <path d="M 295 320 L 345 320"/>
+    <path d="M 295 400 L 345 340"/>
+  </g>
+
+  <!-- Highlighted active path -->
+  <g stroke="#00d4ff" stroke-width="2.5" fill="none" opacity="0.6" filter="url(#nodeGlow)">
+    <path d="M 168 320 L 228 320"/>
+    <path d="M 292 320 L 348 320"/>
+  </g>
+
+  <!-- Start node (diamond) -->
+  <g filter="url(#glow)">
+    <polygon points="148,320 168,300 188,320 168,340" fill="#0d0d0d" stroke="#00d4ff" stroke-width="2.5"/>
+    <polygon points="158,320 168,310 178,320 168,330" fill="#00d4ff" opacity="0.3"/>
+  </g>
+
+  <!-- Parallel task nodes (rounded rects) -->
+  <!-- Task A (top) -->
+  <g filter="url(#nodeGlow)">
+    <rect x="225" y="218" width="70" height="40" rx="8" fill="#0d0d0d" stroke="#00d4ff" stroke-width="2" opacity="0.8"/>
+    <text x="260" y="243" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="12" fill="#00d4ff" text-anchor="middle" opacity="0.7">A</text>
+  </g>
+  <!-- Task B (middle, highlighted) -->
+  <g filter="url(#glow)">
+    <rect x="225" y="298" width="70" height="40" rx="8" fill="#0d0d0d" stroke="#00d4ff" stroke-width="2.5"/>
+    <rect x="228" y="301" width="64" height="34" rx="6" fill="#00d4ff" opacity="0.08"/>
+    <text x="260" y="323" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="12" fill="#00d4ff" text-anchor="middle">B</text>
+  </g>
+  <!-- Task C (bottom) -->
+  <g filter="url(#nodeGlow)">
+    <rect x="225" y="378" width="70" height="40" rx="8" fill="#0d0d0d" stroke="#00d4ff" stroke-width="2" opacity="0.8"/>
+    <text x="260" y="403" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="12" fill="#00d4ff" text-anchor="middle" opacity="0.7">C</text>
+  </g>
+
+  <!-- Merge/sync node (diamond) -->
+  <g filter="url(#glow)">
+    <polygon points="346,320 366,295 386,320 366,345" fill="#0d0d0d" stroke="#00d4ff" stroke-width="2.5"/>
+    <polygon points="356,320 366,310 376,320 366,330" fill="#00d4ff" opacity="0.3"/>
+  </g>
+
+  <!-- "Parallel" bracket indicators -->
+  <g stroke="#00d4ff" stroke-width="1" opacity="0.2" stroke-dasharray="3,3">
+    <line x1="218" y1="215" x2="218" y2="425"/>
+    <line x1="302" y1="215" x2="302" y2="425"/>
+  </g>
+  <text x="260" y="205" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="10" fill="#00d4ff" text-anchor="middle" opacity="0.3">PARALLEL</text>
+
+  <!-- Timing indicators -->
+  <g font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="9" fill="#00d4ff" opacity="0.25">
+    <text x="260" y="260">120ms</text>
+    <text x="260" y="340">85ms</text>
+    <text x="260" y="420">95ms</text>
+  </g>
+
+  <!-- Floating data particles -->
+  <g fill="#00d4ff" opacity="0.25">
+    <circle cx="120" cy="260" r="1.5"/>
+    <circle cx="400" cy="280" r="2"/>
+    <circle cx="110" cy="380" r="1.5"/>
+    <circle cx="410" cy="370" r="1.5"/>
+    <circle cx="200" cy="180" r="1"/>
+    <circle cx="320" cy="460" r="1.5"/>
+  </g>
+
+  <!-- === RIGHT SIDE: Text === -->
+
+  <!-- Tool name -->
+  <text x="540" y="250" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="72" font-weight="700" fill="#00d4ff" letter-spacing="-2">
+    synapse
+  </text>
+
+  <!-- Underline accent -->
+  <rect x="540" y="268" width="160" height="3" rx="1.5" fill="#00d4ff" opacity="0.5"/>
+
+  <!-- Tagline -->
+  <text x="540" y="315" font-family="-apple-system, 'Segoe UI', Helvetica, sans-serif" font-size="24" fill="#cccccc" letter-spacing="0.5">
+    Auto-parallel tool execution for AI agents
+  </text>
+
+  <!-- Stats -->
+  <g font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="15" fill="#666666">
+    <circle cx="548" cy="380" r="3" fill="#00d4ff" opacity="0.6"/>
+    <text x="560" y="384">3.3x Faster</text>
+    <circle cx="548" cy="412" r="3" fill="#00d4ff" opacity="0.6"/>
+    <text x="560" y="416">Auto Dependency Detection</text>
+    <circle cx="548" cy="444" r="3" fill="#00d4ff" opacity="0.6"/>
+    <text x="560" y="448">LangChain Ready</text>
+  </g>
+
+  <!-- Separator -->
+  <line x1="540" y1="490" x2="1100" y2="490" stroke="#1a1a1a" stroke-width="1"/>
+
+  <!-- Footer -->
+  <text x="540" y="530" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="14" fill="#444444" letter-spacing="2">
+    speed785.github.io
+  </text>
+
+  <!-- Corner decorations -->
+  <g stroke="#00d4ff" stroke-width="1" opacity="0.2">
+    <path d="M 20 20 L 20 50"/>
+    <path d="M 20 20 L 50 20"/>
+    <path d="M 1260 20 L 1260 50"/>
+    <path d="M 1260 20 L 1230 20"/>
+    <path d="M 20 620 L 20 590"/>
+    <path d="M 20 620 L 50 620"/>
+    <path d="M 1260 620 L 1260 590"/>
+    <path d="M 1260 620 L 1230 620"/>
+  </g>
+
+  <!-- Noise overlay -->
+  <rect width="1280" height="640" filter="url(#noise)" opacity="0.5"/>
+</svg>
