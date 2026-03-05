@@ -85,7 +85,7 @@ The planner is a simple BFS topological sort. No magic, no runtime overhead wort
 - **Per-call retries and timeouts** on every `ToolCall`
 - **Execution reports** with wall-clock time, per-call durations, and speedup estimate
 - **Observability** via `SynapseLogger` with Prometheus export and OpenTelemetry hooks
-- **OpenAI, Anthropic, LangChain** integrations — drop-in wrappers, no agent rewrite
+- **OpenAI, Anthropic, LangChain, LlamaIndex, CrewAI** integrations — drop-in wrappers, no agent rewrite
 - **Python + TypeScript** implementations, same API surface
 - **100% test coverage**
 
@@ -102,6 +102,8 @@ pip install synapse-orchestrator
 pip install synapse-orchestrator[openai]
 pip install synapse-orchestrator[anthropic]
 pip install synapse-orchestrator[langchain]
+pip install synapse-orchestrator[llamaindex]
+pip install synapse-orchestrator[crewai]
 ```
 
 **Before synapse** — four awaits, one at a time:
@@ -322,6 +324,37 @@ report = await synapse_executor.arun_tool_batch([
 
 Synapse auto-adapts LangChain tools via `ainvoke`, `arun`, `invoke`, or `run` — whichever the tool supports.
 
+### LlamaIndex
+
+```python
+from synapse.integrations.llamaindex import SynapseFunctionCallingAgent
+
+synapse_agent = SynapseFunctionCallingAgent(function_calling_agent)
+
+report = await synapse_agent.arun_tool_batch([
+    {"id": "search", "name": "web_search", "inputs": {"query": "quantum computing"}},
+    {"id": "papers", "name": "paper_lookup", "inputs": {"topic": "fusion energy"}},
+    {"id": "merge", "name": "summarize", "inputs": {"a": "$results.search", "b": "$results.papers"}},
+])
+```
+
+### CrewAI
+
+```python
+from synapse.integrations.crewai import SynapseCrewTaskExecutor
+
+executor = SynapseCrewTaskExecutor(task_executors={
+    "research": research_task,
+    "draft": draft_task,
+})
+
+report = await executor.arun_tasks([
+    {"id": "r1", "name": "research", "inputs": {"topic": "quantum networking"}},
+    {"id": "r2", "name": "research", "inputs": {"topic": "fusion engineering"}},
+    {"id": "d1", "name": "draft", "inputs": {"sources": "$results.r1"}, "depends_on": ["r1"]},
+])
+```
+
 ---
 
 ## Benchmarks
@@ -416,7 +449,9 @@ synapse-orchestrator/
 │       └── integrations/
 │           ├── openai.py           # OpenAI function-calling wrapper
 │           ├── anthropic.py        # Anthropic tool-use wrapper
-│           └── langchain.py        # LangChain AgentExecutor adapter
+│           ├── langchain.py        # LangChain AgentExecutor adapter
+│           ├── llamaindex.py       # LlamaIndex FunctionCallingAgent adapter
+│           └── crewai.py           # CrewAI task executor adapter
 │
 ├── typescript/
 │   └── src/
@@ -443,7 +478,7 @@ synapse-orchestrator/
 3. Add your changes and tests.
 4. Submit a pull request.
 
-New integrations (LlamaIndex, VertexAI, Bedrock...), visualization tools, async generator support, and streaming are all welcome.
+New integrations (VertexAI, Bedrock...), visualization tools, async generator support, and streaming are all welcome.
 
 ---
 

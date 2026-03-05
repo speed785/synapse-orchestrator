@@ -38,6 +38,13 @@ from .executor import CallResult, ExecutionReport, Executor
 from .observability import ExecutionMetrics, OTelIntegration, SynapseLogger
 from .orchestrator import Orchestrator
 from .planner import ExecutionPlan, Planner, Stage
+from .integrations import (
+    SynapseOpenAI,
+    SynapseAnthropic,
+    SynapseAgentExecutor,
+    SynapseFunctionCallingAgent,
+    SynapseCrewTaskExecutor,
+)
 
 __all__ = [
     # Core classes
@@ -57,4 +64,9 @@ __all__ = [
     "SynapseLogger",
     "ExecutionMetrics",
     "OTelIntegration",
+    "SynapseOpenAI",
+    "SynapseAnthropic",
+    "SynapseAgentExecutor",
+    "SynapseFunctionCallingAgent",
+    "SynapseCrewTaskExecutor",
 ]

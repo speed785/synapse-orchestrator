@@ -190,6 +190,10 @@ def test_integrations_init_fallback_when_langchain_import_fails(monkeypatch: pyt
     def fake_import(name: str, globals_obj: Any = None, locals_obj: Any = None, fromlist: Any = (), level: int = 0) -> Any:
         if name == "langchain" and level == 1 and fromlist == ("SynapseAgentExecutor",):
             raise RuntimeError("langchain unavailable")
+        if name == "llamaindex" and level == 1 and fromlist == ("SynapseFunctionCallingAgent",):
+            raise RuntimeError("llamaindex unavailable")
+        if name == "crewai" and level == 1 and fromlist == ("SynapseCrewTaskExecutor",):
+            raise RuntimeError("crewai unavailable")
         return real_import(name, globals_obj, locals_obj, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
@@ -199,3 +203,5 @@ def test_integrations_init_fallback_when_langchain_import_fails(monkeypatch: pyt
     exec(compile(source, str(package_path), "exec"), module.__dict__)
 
     assert module.SynapseAgentExecutor is None
+    assert module.SynapseFunctionCallingAgent is None
+    assert module.SynapseCrewTaskExecutor is None
