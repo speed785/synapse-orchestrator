@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta:__legacy__"
+
+[project]
+name = "synapse-orchestrator"
+version = "0.1.0"
+description = "Parallel tool call orchestrator for AI agents — auto-detect dependencies, maximise concurrency."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+keywords = [
+  "ai",
+  "agent",
+  "llm",
+  "orchestration",
+  "parallel",
+  "async",
+  "dag",
+  "openai",
+  "anthropic",
+  "langchain",
+  "tool-calling",
+  "concurrency",
+  "performance",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Libraries",
+]
+dependencies = []
+
+[project.optional-dependencies]
+openai = ["openai>=1.0"]
+anthropic = ["anthropic>=0.25"]
+langchain = ["langchain>=0.1.0"]
+all = ["openai>=1.0", "anthropic>=0.25", "langchain>=0.1.0"]
+dev = [
+  "pytest>=7.0",
+  "pytest-asyncio>=0.21",
+  "pytest-cov>=4.1",
+  "openai>=1.0",
+  "anthropic>=0.25",
+  "langchain>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://speed785.github.io/synapse-orchestrator"
+Documentation = "https://speed785.github.io/synapse-orchestrator"
+Repository = "https://github.com/speed785/synapse-orchestrator"
+Issues = "https://github.com/speed785/synapse-orchestrator/issues"
+Changelog = "https://github.com/speed785/synapse-orchestrator/blob/main/CHANGELOG.md"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "--cov=synapse --cov-report=term-missing --cov-fail-under=100"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = false
+ignore_missing_imports = true

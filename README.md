@@ -4,7 +4,7 @@
   <p><strong>Parallel tool execution for AI agents. Auto-detect dependencies, maximize speed.</strong></p>
 
   [![CI](https://github.com/speed785/synapse-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/speed785/synapse-orchestrator/actions/workflows/ci.yml)
-  [![Coverage](https://codecov.io/gh/speed785/synapse-orchestrator/branch/main/graph/badge.svg)](https://codecov.io/gh/speed785/synapse-orchestrator)
+  [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/speed785/synapse-orchestrator)
   [![PyPI](https://img.shields.io/pypi/v/synapse-orchestrator)](https://pypi.org/project/synapse-orchestrator/)
   [![npm](https://img.shields.io/npm/v/synapse-orchestrator)](https://www.npmjs.com/package/synapse-orchestrator)
   [![Python](https://img.shields.io/badge/python-3.9+-blue)](https://python.org)
