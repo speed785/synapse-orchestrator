@@ -31,21 +31,28 @@
   ],
   "keywords": [
     "ai",
-    "agents",
+    "agent",
     "llm",
-    "tool-calls",
-    "parallel",
     "orchestration",
-    "asyncio",
+    "parallel",
+    "async",
+    "dag",
     "openai",
     "anthropic",
-    "dag"
+    "langchain",
+    "tool-calling",
+    "concurrency",
+    "performance"
   ],
   "author": "Synapse Contributors",
   "license": "MIT",
+  "homepage": "https://github.com/speed785/synapse-orchestrator#readme",
+  "bugs": {
+    "url": "https://github.com/speed785/synapse-orchestrator/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/speed785/synapse-orchestrator"
+    "url": "git+https://github.com/speed785/synapse-orchestrator.git"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

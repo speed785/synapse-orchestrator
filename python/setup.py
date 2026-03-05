@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 with open("../README.md", encoding="utf-8") as f:
     long_description = f.read()
 
-setup(
+_ = setup(
     name="synapse-orchestrator",
     version="0.1.0",
     description="Parallel tool call orchestrator for AI agents — auto-detect dependencies, maximise concurrency.",
@@ -42,5 +42,5 @@ setup(
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Topic :: Software Development :: Libraries",
     ],
-    keywords="ai agents llm tool-calls parallel orchestration asyncio openai anthropic",
+    keywords="ai agent llm orchestration parallel async dag openai anthropic langchain tool-calling concurrency performance",
 )
