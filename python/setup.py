@@ -20,12 +20,15 @@ setup(
     extras_require={
         "openai": ["openai>=1.0"],
         "anthropic": ["anthropic>=0.25"],
-        "all": ["openai>=1.0", "anthropic>=0.25"],
+        "langchain": ["langchain>=0.1.0"],
+        "all": ["openai>=1.0", "anthropic>=0.25", "langchain>=0.1.0"],
         "dev": [
             "pytest>=7.0",
             "pytest-asyncio>=0.21",
+            "pytest-cov>=4.1",
             "openai>=1.0",
             "anthropic>=0.25",
+            "langchain>=0.1.0",
         ],
     },
     classifiers=[
