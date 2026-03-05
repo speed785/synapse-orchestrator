@@ -1,5 +1,5 @@
-from synapse.dependency_analyzer import DependencyAnalyzer, ToolCall
-from synapse.planner import Planner
+from synapse.dependency_analyzer import DependencyAnalyzer, DependencyGraph, ToolCall  # pyright: ignore[reportImplicitRelativeImport]
+from synapse.planner import Planner  # pyright: ignore[reportImplicitRelativeImport]
 
 
 def test_planner_builds_expected_stages() -> None:
@@ -41,3 +41,32 @@ def test_planner_handles_empty_graph() -> None:
     assert plan.total_calls == 0
     assert plan.parallelism == 0.0
     assert plan.critical_path == []
+
+
+def test_planner_repr_methods_and_cycle_error_path() -> None:
+    a = ToolCall(id="a", name="tool_a")
+    b = ToolCall(id="b", name="tool_b")
+    graph = DependencyGraph(
+        nodes={"a": a, "b": b},
+        edges={"a": {"b"}, "b": {"a"}},
+        rev_edges={"a": {"b"}, "b": {"a"}},
+    )
+
+    planner = Planner()
+    try:
+        planner.plan(graph)
+        assert False, "Expected ValueError for cyclic graph"
+    except ValueError as exc:
+        assert "Cycle detected during planning" in str(exc)
+
+    valid_graph = DependencyAnalyzer().analyze(
+        [
+            ToolCall(id="root", name="root"),
+            ToolCall(id="leaf", name="leaf", inputs={"x": "$results.root"}),
+        ]
+    )
+    plan = planner.plan(valid_graph)
+    assert "Stage(0, [root])" in repr(plan.stages[0])
+    plan_repr = repr(plan)
+    assert "ExecutionPlan(2 calls" in plan_repr
+    assert "Stage 1: ['leaf']" in plan_repr

@@ -1,4 +1,4 @@
-from synapse.dependency_analyzer import DependencyAnalyzer, ToolCall
+from synapse.dependency_analyzer import DependencyAnalyzer, ToolCall  # pyright: ignore[reportImplicitRelativeImport]
 
 
 def test_analyze_valid_dag_with_implicit_and_explicit_dependencies() -> None:
@@ -66,3 +66,22 @@ def test_analyze_ignores_self_dependency_and_handles_empty_inputs() -> None:
     assert graph.dependencies_of("self") == set()
     assert graph.dependencies_of("next") == set()
     assert set(graph.roots()) == {"self", "next"}
+
+
+def test_analyze_extracts_references_from_nested_lists_and_tuples() -> None:
+    analyzer = DependencyAnalyzer()
+    calls = [
+        ToolCall(id="a", name="tool_a"),
+        ToolCall(id="b", name="tool_b"),
+        ToolCall(
+            id="join",
+            name="join_tool",
+            inputs={
+                "items": ["$results.a.value", ("$results.b", "x")],
+            },
+        ),
+    ]
+
+    graph = analyzer.analyze(calls)
+
+    assert graph.dependencies_of("join") == {"a", "b"}

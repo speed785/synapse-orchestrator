@@ -1,11 +1,14 @@
 import json
+import sys
+import builtins
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
-from synapse.integrations.anthropic import SynapseAnthropic
-from synapse.integrations.openai import SynapseOpenAI
+from synapse.integrations.anthropic import SynapseAnthropic  # pyright: ignore[reportImplicitRelativeImport]
+from synapse.integrations.openai import SynapseOpenAI  # pyright: ignore[reportImplicitRelativeImport]
 
 
 class _MockOpenAIClient:
@@ -118,3 +121,81 @@ async def test_anthropic_integration_includes_error_details_in_tool_results() ->
     bad_payload = json.loads(bad_result["content"])
     assert bad_payload["error"] == "anthropic boom"
     assert bad_payload["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_integrations_raise_on_retry_exhaustion_rounds() -> None:
+    class _NeverEndingOpenAIClient:
+        def __init__(self) -> None:
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+        async def _create(self, **params: Any) -> Any:
+            tool_calls = [
+                SimpleNamespace(
+                    id="tc",
+                    function=SimpleNamespace(name="ok_tool", arguments=json.dumps({})),
+                )
+            ]
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=tool_calls))]
+            )
+
+    class _NeverEndingAnthropicClient:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, Any]] = []
+            self.messages = SimpleNamespace(create=self._create)
+
+        async def _create(self, **params: Any) -> Any:
+            self.calls.append(params)
+            return SimpleNamespace(
+                content=[SimpleNamespace(type="tool_use", id="a", name="ok_tool", input={})],
+                stop_reason="tool_use",
+            )
+
+    async def ok_tool() -> str:
+        return "ok"
+
+    openai = SynapseOpenAI(
+        openai_client=_NeverEndingOpenAIClient(),
+        tools={"ok_tool": ok_tool},
+        max_rounds=1,
+    )
+    anthropic_client = _NeverEndingAnthropicClient()
+    anthropic = SynapseAnthropic(
+        anthropic_client=anthropic_client,
+        tools={"ok_tool": ok_tool},
+        max_rounds=1,
+    )
+
+    with pytest.raises(RuntimeError, match="Exceeded max_rounds=1"):
+        await openai.chat(model="gpt", messages=[{"role": "user", "content": "go"}], tools=[])
+
+    with pytest.raises(RuntimeError, match="Exceeded max_rounds=1"):
+        await anthropic.messages(
+            model="claude",
+            max_tokens=32,
+            messages=[{"role": "user", "content": "go"}],
+            tools=[],
+            system="sys",
+        )
+    assert anthropic_client.calls[0]["system"] == "sys"
+
+
+def test_integrations_init_fallback_when_langchain_import_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    package_path = Path(__file__).resolve().parents[1] / "synapse" / "integrations" / "__init__.py"
+    source = package_path.read_text(encoding="utf-8")
+
+    real_import = builtins.__import__
+
+    def fake_import(name: str, globals_obj: Any = None, locals_obj: Any = None, fromlist: Any = (), level: int = 0) -> Any:
+        if name == "langchain" and level == 1 and fromlist == ("SynapseAgentExecutor",):
+            raise RuntimeError("langchain unavailable")
+        return real_import(name, globals_obj, locals_obj, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    module = type(sys)("tmp_integrations_init")
+    module.__package__ = "synapse.integrations"
+    exec(compile(source, str(package_path), "exec"), module.__dict__)
+
+    assert module.SynapseAgentExecutor is None
