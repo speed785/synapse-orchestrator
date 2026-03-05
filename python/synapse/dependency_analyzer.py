@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 # Pattern that matches output references like $results.<tool_id>.<field>
-_REF_PATTERN = re.compile(r"\$results\.([a-zA-Z0-9_\-]+)")
+_REF_PATTERN = re.compile(r"\$results\.([a-zA-Z0-9_\-\.\[\]]+)")
 
 
 @dataclass
@@ -87,7 +87,20 @@ class DependencyGraph:
         return all(dfs(n) for n in self.nodes if n not in visited)
 
 
-def _extract_refs(value: Any) -> set[str]:
+def _resolve_ref_to_tool_id(raw_ref: str, known_ids: set[str]) -> str:
+    if raw_ref in known_ids:
+        return raw_ref
+
+    candidate = raw_ref
+    while "." in candidate:
+        candidate = candidate.rsplit(".", 1)[0]
+        if candidate in known_ids:
+            return candidate
+
+    return raw_ref
+
+
+def _extract_refs(value: Any, known_ids: set[str]) -> set[str]:
     """
     Recursively walk a value (dict, list, str, …) and collect all
     tool-call IDs referenced via $results.<id> syntax.
@@ -95,13 +108,13 @@ def _extract_refs(value: Any) -> set[str]:
     refs: set[str] = set()
     if isinstance(value, str):
         for match in _REF_PATTERN.finditer(value):
-            refs.add(match.group(1))
+            refs.add(_resolve_ref_to_tool_id(match.group(1), known_ids))
     elif isinstance(value, dict):
         for v in value.values():
-            refs |= _extract_refs(v)
+            refs |= _extract_refs(v, known_ids)
     elif isinstance(value, (list, tuple)):
         for item in value:
-            refs |= _extract_refs(item)
+            refs |= _extract_refs(item, known_ids)
     return refs
 
 
@@ -126,7 +139,7 @@ class DependencyAnalyzer:
 
         for call in calls:
             deps: set[str] = set(call.depends_on)
-            deps |= _extract_refs(call.inputs)
+            deps |= _extract_refs(call.inputs, known_ids)
 
             # Validate referenced IDs exist
             unknown = deps - known_ids

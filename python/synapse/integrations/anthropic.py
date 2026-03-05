@@ -72,7 +72,7 @@ def _build_tool_result_content(report: ExecutionReport) -> list[dict[str, Any]]:
             content = json.dumps(result.output) if not isinstance(result.output, str) else result.output
         else:
             import json
-            content = json.dumps({"error": result.error, "status": result.status})
+            content = json.dumps({"error": result.error or "Unknown tool error", "status": result.status})
 
         results.append(
             {

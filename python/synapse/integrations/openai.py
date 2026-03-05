@@ -66,11 +66,15 @@ def _build_tool_messages(report: ExecutionReport) -> list[dict[str, Any]]:
     """
     messages = []
     for call_id, result in report.results.items():
-        content = (
-            json.dumps(result.output)
-            if result.output is not None
-            else json.dumps({"error": result.error})
-        )
+        if result.status == "success":
+            content = json.dumps(result.output)
+        else:
+            content = json.dumps(
+                {
+                    "error": result.error or "Unknown tool error",
+                    "status": result.status,
+                }
+            )
         messages.append(
             {
                 "role": "tool",

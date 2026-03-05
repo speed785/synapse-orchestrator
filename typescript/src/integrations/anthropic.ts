@@ -76,7 +76,7 @@ function buildToolResultContent(report: ExecutionReport): ContentBlock[] {
         ? typeof result.output === "string"
           ? result.output
           : JSON.stringify(result.output)
-        : JSON.stringify({ error: result.error, status: result.status });
+        : JSON.stringify({ error: result.error ?? "Unknown tool error", status: result.status });
 
     results.push({
       type: "tool_result",

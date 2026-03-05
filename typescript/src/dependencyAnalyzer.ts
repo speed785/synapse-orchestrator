@@ -8,7 +8,7 @@
  */
 
 /** Pattern matching $results.<toolId>[.<path>] placeholders. */
-const REF_PATTERN = /\$results\.([a-zA-Z0-9_\-]+)/g;
+const REF_PATTERN = /\$results\.([a-zA-Z0-9_\-.\[\]]+)/g;
 
 /** A single planned tool call. */
 export interface ToolCall {
@@ -38,23 +38,35 @@ export interface DependencyGraph {
   revEdges: Map<string, Set<string>>;
 }
 
+function resolveRefToToolId(rawRef: string, knownIds: Set<string>): string {
+  if (knownIds.has(rawRef)) return rawRef;
+
+  let candidate = rawRef;
+  while (candidate.includes(".")) {
+    candidate = candidate.substring(0, candidate.lastIndexOf("."));
+    if (knownIds.has(candidate)) return candidate;
+  }
+
+  return rawRef;
+}
+
 /** Returns all $results.<id> references found anywhere inside a value. */
-function extractRefs(value: unknown): Set<string> {
+function extractRefs(value: unknown, knownIds: Set<string>): Set<string> {
   const refs = new Set<string>();
   if (typeof value === "string") {
     let m: RegExpExecArray | null;
     // Reset lastIndex before each iteration
     REF_PATTERN.lastIndex = 0;
     while ((m = REF_PATTERN.exec(value)) !== null) {
-      refs.add(m[1]);
+      refs.add(resolveRefToToolId(m[1], knownIds));
     }
   } else if (Array.isArray(value)) {
     for (const item of value) {
-      for (const ref of extractRefs(item)) refs.add(ref);
+      for (const ref of extractRefs(item, knownIds)) refs.add(ref);
     }
   } else if (value !== null && typeof value === "object") {
     for (const v of Object.values(value as Record<string, unknown>)) {
-      for (const ref of extractRefs(v)) refs.add(ref);
+      for (const ref of extractRefs(v, knownIds)) refs.add(ref);
     }
   }
   return refs;
@@ -99,7 +111,7 @@ export class DependencyAnalyzer {
       const deps = new Set<string>(call.dependsOn ?? []);
 
       // Add implicit deps from $results.* references
-      for (const ref of extractRefs(call.inputs ?? {})) {
+      for (const ref of extractRefs(call.inputs ?? {}, knownIds)) {
         deps.add(ref);
       }
 

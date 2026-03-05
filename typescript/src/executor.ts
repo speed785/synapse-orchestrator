@@ -39,8 +39,20 @@ export interface ExecutionReport {
 
 // ── Placeholder resolution ─────────────────────────────────────────────────────
 
-const REF_FULL = /^\$results\.([a-zA-Z0-9_\-]+)(?:\.(.+))?$/;
-const REF_INLINE = /\$results\.([a-zA-Z0-9_\-]+)(?:\.([a-zA-Z0-9_.\[\]]+))?/g;
+const REF_FULL = /^\$results\.([a-zA-Z0-9_\-.\[\]]+)$/;
+const REF_INLINE = /\$results\.([a-zA-Z0-9_\-.\[\]]+)/g;
+
+function splitRef(rawRef: string, results: Map<string, unknown>): [string, string | undefined] {
+  const parts = rawRef.split(".");
+  for (let i = parts.length; i > 0; i--) {
+    const candidate = parts.slice(0, i).join(".");
+    if (results.has(candidate)) {
+      const suffix = parts.slice(i).join(".");
+      return [candidate, suffix || undefined];
+    }
+  }
+  return [rawRef, undefined];
+}
 
 function getNestedValue(obj: unknown, path: string | undefined): unknown {
   if (!path || obj === undefined || obj === null) return obj;
@@ -63,13 +75,15 @@ function resolve(value: unknown, results: Map<string, unknown>): unknown {
   if (typeof value === "string") {
     const fullMatch = REF_FULL.exec(value);
     if (fullMatch) {
-      return getNestedValue(results.get(fullMatch[1]), fullMatch[2]);
+      const [id, path] = splitRef(fullMatch[1], results);
+      return getNestedValue(results.get(id), path);
     }
     // Inline substitution (always produces a string)
     REF_INLINE.lastIndex = 0;
-    return value.replace(REF_INLINE, (_, id, path) => {
+    return value.replace(REF_INLINE, (match, rawRef: string) => {
+      const [id, path] = splitRef(rawRef, results);
       const v = getNestedValue(results.get(id), path);
-      return v !== undefined ? String(v) : _;
+      return v !== undefined ? String(v) : match;
     });
   }
   if (Array.isArray(value)) return value.map((item) => resolve(item, results));
@@ -126,8 +140,8 @@ export class Executor {
   private semaphore: Semaphore;
   private defaultTimeoutMs: number;
   private defaultRetries: number;
-  private onCallStart?: (call: ToolCall) => void;
-  private onCallEnd?: (result: CallResult) => void;
+  private onCallStart: ((call: ToolCall) => void) | undefined;
+  private onCallEnd: ((result: CallResult) => void) | undefined;
 
   constructor(tools: Record<string, AsyncToolFn>, options: ExecutorOptions = {}) {
     this.tools = new Map(Object.entries(tools));

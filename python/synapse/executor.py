@@ -24,7 +24,7 @@ from .planner import ExecutionPlan
 # ── Type alias for an async tool implementation ───────────────────────────────
 AsyncToolFn = Callable[..., Coroutine[Any, Any, Any]]
 
-_REF_PATTERN = re.compile(r"\$results\.([a-zA-Z0-9_\-]+)(?:\.([a-zA-Z0-9_\.\[\]]+))?")
+_REF_PATTERN = re.compile(r"\$results\.([a-zA-Z0-9_\-\.\[\]]+)")
 
 
 # ── Per-call result ────────────────────────────────────────────────────────────
@@ -80,10 +80,12 @@ def _resolve(value: Any, results: dict[str, Any]) -> Any:
         # Single full-match replacement preserves non-string types
         full = _REF_PATTERN.fullmatch(value)
         if full:
-            return _get_nested(results.get(full.group(1)), full.group(2))
+            ref_id, path = _split_ref(full.group(1), results)
+            return _get_nested(results.get(ref_id), path)
         # Inline replacement (always produces a string)
-        def replacer(m: re.Match) -> str:
-            v = _get_nested(results.get(m.group(1)), m.group(2))
+        def replacer(m: re.Match[str]) -> str:
+            ref_id, path = _split_ref(m.group(1), results)
+            v = _get_nested(results.get(ref_id), path)
             return str(v) if v is not None else m.group(0)
         return _REF_PATTERN.sub(replacer, value)
     elif isinstance(value, dict):
@@ -91,6 +93,17 @@ def _resolve(value: Any, results: dict[str, Any]) -> Any:
     elif isinstance(value, list):
         return [_resolve(item, results) for item in value]
     return value
+
+
+def _split_ref(raw_ref: str, results: dict[str, Any]) -> tuple[str, str | None]:
+    parts = raw_ref.split(".")
+    for i in range(len(parts), 0, -1):
+        candidate = ".".join(parts[:i])
+        if candidate in results:
+            suffix = ".".join(parts[i:])
+            return candidate, (suffix or None)
+
+    return raw_ref, None
 
 
 def _get_nested(obj: Any, path: str | None) -> Any:
@@ -205,6 +218,8 @@ class Executor:
         max_attempts = 1 + (call.retries if call.retries else self.default_retries)
 
         last_error: str = ""
+        last_status: str = "error"
+        last_duration_ms: float = 0.0
         for attempt in range(1, max_attempts + 1):
             if self.on_call_start:
                 self.on_call_start(call)
@@ -227,13 +242,13 @@ class Executor:
                     self.on_call_end(result)
                 return result
             except asyncio.TimeoutError:
-                duration_ms = (time.perf_counter() - t0) * 1000
+                last_duration_ms = (time.perf_counter() - t0) * 1000
                 last_error = f"Timed out after {timeout}s"
-                status = "timeout"
+                last_status = "timeout"
             except Exception as exc:  # noqa: BLE001
-                duration_ms = (time.perf_counter() - t0) * 1000
+                last_duration_ms = (time.perf_counter() - t0) * 1000
                 last_error = str(exc)
-                status = "error"
+                last_status = "error"
 
             if attempt < max_attempts:
                 await asyncio.sleep(0.1 * (2 ** (attempt - 1)))  # back-off
@@ -241,9 +256,9 @@ class Executor:
         result = CallResult(
             call_id=call.id,
             tool_name=call.name,
-            status=status,
+            status=last_status,
             error=last_error,
-            duration_ms=duration_ms,
+            duration_ms=last_duration_ms,
             attempts=max_attempts,
         )
         if self.on_call_end:

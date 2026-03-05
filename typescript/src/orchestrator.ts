@@ -29,7 +29,7 @@
 
 import { DependencyAnalyzer, ToolCall, DependencyGraph } from "./dependencyAnalyzer.js";
 import { Planner, ExecutionPlan } from "./planner.js";
-import { AsyncToolFn, CallResult, ExecutionReport, Executor, ExecutorOptions } from "./executor.js";
+import { AsyncToolFn, ExecutionReport, Executor, ExecutorOptions } from "./executor.js";
 
 export type { ToolCall, DependencyGraph } from "./dependencyAnalyzer.js";
 export type { ExecutionPlan, Stage } from "./planner.js";

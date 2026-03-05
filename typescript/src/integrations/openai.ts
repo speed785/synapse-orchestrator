@@ -73,9 +73,9 @@ function buildToolMessages(report: ExecutionReport): Array<Record<string, unknow
       role: "tool",
       tool_call_id: callId,
       content:
-        result.output !== undefined
+        result.status === "success"
           ? JSON.stringify(result.output)
-          : JSON.stringify({ error: result.error }),
+          : JSON.stringify({ error: result.error ?? "Unknown tool error", status: result.status }),
     });
   }
   return messages;
