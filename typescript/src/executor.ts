@@ -11,6 +11,7 @@
  */
 
 import type { ToolCall } from "./dependencyAnalyzer.js";
+import type { OTelIntegration, SynapseLogger } from "./observability.js";
 import type { ExecutionPlan } from "./planner.js";
 
 export type AsyncToolFn = (...args: unknown[]) => Promise<unknown>;
@@ -133,6 +134,8 @@ export interface ExecutorOptions {
   defaultRetries?: number;
   onCallStart?: (call: ToolCall) => void;
   onCallEnd?: (result: CallResult) => void;
+  logger?: SynapseLogger;
+  otel?: OTelIntegration;
 }
 
 export class Executor {
@@ -142,6 +145,8 @@ export class Executor {
   private defaultRetries: number;
   private onCallStart: ((call: ToolCall) => void) | undefined;
   private onCallEnd: ((result: CallResult) => void) | undefined;
+  private logger: SynapseLogger | undefined;
+  private otel: OTelIntegration | undefined;
 
   constructor(tools: Record<string, AsyncToolFn>, options: ExecutorOptions = {}) {
     this.tools = new Map(Object.entries(tools));
@@ -150,6 +155,8 @@ export class Executor {
     this.defaultRetries = options.defaultRetries ?? 0;
     this.onCallStart = options.onCallStart;
     this.onCallEnd = options.onCallEnd;
+    this.logger = options.logger;
+    this.otel = options.otel;
   }
 
   async execute(plan: ExecutionPlan): Promise<ExecutionReport> {
@@ -162,6 +169,16 @@ export class Executor {
     const wallStart = performance.now();
 
     for (const stage of plan.stages) {
+      const stageStart = performance.now();
+      this.logger?.log("stage_started", {
+        stageIndex: stage.index,
+        parallelCount: stage.calls.length,
+        toolCount: stage.calls.length,
+      });
+      const stageSpan = this.otel?.startSpan("synapse.stage", {
+        stageIndex: stage.index,
+        toolCount: stage.calls.length,
+      });
       if (stage.calls.length > 1) {
         parallelCalls += stage.calls.length;
       } else {
@@ -169,8 +186,17 @@ export class Executor {
       }
 
       const stageResults = await Promise.all(
-        stage.calls.map((call) => this.runCall(call, accumulated))
+        stage.calls.map((call) => this.runCall(call, accumulated, stage.index, stage.calls.length))
       );
+
+      const stageLatencyMs = performance.now() - stageStart;
+      this.logger?.log("stage_completed", {
+        stageIndex: stage.index,
+        latencyMs: stageLatencyMs,
+        parallelCount: stage.calls.length,
+        toolCount: stage.calls.length,
+      });
+      this.otel?.endSpan(stageSpan, stageResults.every((result) => result.status === "success"));
 
       for (const result of stageResults) {
         allResults.set(result.callId, result);
@@ -181,6 +207,14 @@ export class Executor {
 
     const totalDurationMs = performance.now() - wallStart;
     const speedupEstimate = totalDurationMs > 0 ? sumDurations / totalDurationMs : 1;
+    const avgParallelism = plan.stages.length > 0 ? plan.totalCalls / plan.stages.length : 0;
+    this.logger?.recordExecution(speedupEstimate, avgParallelism);
+    this.logger?.log("execution_complete", {
+      latencyMs: totalDurationMs,
+      parallelCount: parallelCalls,
+      totalCalls: plan.totalCalls,
+      speedupRatio: speedupEstimate,
+    });
 
     return {
       results: allResults,
@@ -194,10 +228,18 @@ export class Executor {
 
   private async runCall(
     call: ToolCall,
-    accumulated: Map<string, unknown>
+    accumulated: Map<string, unknown>,
+    stageIndex: number,
+    parallelCount: number
   ): Promise<CallResult> {
     const toolFn = this.tools.get(call.name);
     if (!toolFn) {
+      this.logger?.log("tool_failed", {
+        stageIndex,
+        toolId: call.id,
+        parallelCount,
+        error: `No tool registered for '${call.name}'`,
+      });
       return {
         callId: call.id,
         toolName: call.name,
@@ -221,6 +263,17 @@ export class Executor {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       this.onCallStart?.(call);
+      this.logger?.log("tool_started", {
+        stageIndex,
+        toolId: call.id,
+        parallelCount,
+      });
+      const toolSpan = this.otel?.startSpan("synapse.tool_call", {
+        stageIndex,
+        toolId: call.id,
+        toolName: call.name,
+        attempt,
+      });
       const t0 = performance.now();
 
       try {
@@ -247,6 +300,14 @@ export class Executor {
           attempts: attempt,
         };
         this.onCallEnd?.(result);
+        this.logger?.recordToolResult(durationMs, false);
+        this.logger?.log("tool_completed", {
+          stageIndex,
+          toolId: call.id,
+          latencyMs: durationMs,
+          parallelCount,
+        });
+        this.otel?.endSpan(toolSpan, true);
         return result;
       } catch (err: unknown) {
         lastDuration = performance.now() - t0;
@@ -258,6 +319,7 @@ export class Executor {
           lastStatus = "error";
           lastError = msg;
         }
+        this.otel?.endSpan(toolSpan, false, lastError);
 
         if (attempt < maxAttempts) {
           await new Promise((r) => setTimeout(r, 100 * 2 ** (attempt - 1)));
@@ -274,6 +336,15 @@ export class Executor {
       attempts: maxAttempts,
     };
     this.onCallEnd?.(result);
+    this.logger?.recordToolResult(lastDuration, true);
+    this.logger?.log("tool_failed", {
+      stageIndex,
+      toolId: call.id,
+      latencyMs: lastDuration,
+      parallelCount,
+      error: lastError,
+      status: lastStatus,
+    });
     return result;
   }
 }

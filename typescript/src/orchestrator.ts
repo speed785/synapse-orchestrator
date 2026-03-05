@@ -30,6 +30,7 @@
 import { DependencyAnalyzer, ToolCall, DependencyGraph } from "./dependencyAnalyzer.js";
 import { Planner, ExecutionPlan } from "./planner.js";
 import { AsyncToolFn, ExecutionReport, Executor, ExecutorOptions } from "./executor.js";
+import { OTelIntegration, SynapseLogger } from "./observability.js";
 
 export type { ToolCall, DependencyGraph } from "./dependencyAnalyzer.js";
 export type { ExecutionPlan, Stage } from "./planner.js";
@@ -37,17 +38,51 @@ export type { AsyncToolFn, CallResult, ExecutionReport } from "./executor.js";
 
 export interface OrchestratorOptions extends ExecutorOptions {
   tools: Record<string, AsyncToolFn>;
+  logger?: SynapseLogger;
+  enableJsonLogs?: boolean;
+  enableOtel?: boolean;
+  debug?: boolean;
 }
 
 export class Orchestrator {
   private analyzer: DependencyAnalyzer;
   private planner: Planner;
   private executor: Executor;
+  private logger: SynapseLogger;
+  private debug: boolean;
 
   constructor(options: OrchestratorOptions) {
+    if (options.logger) {
+      this.logger = options.logger;
+    } else if (options.enableJsonLogs !== undefined) {
+      this.logger = new SynapseLogger({ enabled: true, emitJson: options.enableJsonLogs });
+    } else {
+      this.logger = new SynapseLogger({ enabled: true });
+    }
+    const otel = options.enableOtel ? new OTelIntegration() : undefined;
+    this.debug = options.debug ?? false;
     this.analyzer = new DependencyAnalyzer();
-    this.planner = new Planner();
-    this.executor = new Executor(options.tools, options);
+    this.planner = new Planner(this.logger);
+    const executorOptions: ExecutorOptions = { logger: this.logger };
+    if (options.maxConcurrency !== undefined) {
+      executorOptions.maxConcurrency = options.maxConcurrency;
+    }
+    if (options.defaultTimeoutMs !== undefined) {
+      executorOptions.defaultTimeoutMs = options.defaultTimeoutMs;
+    }
+    if (options.defaultRetries !== undefined) {
+      executorOptions.defaultRetries = options.defaultRetries;
+    }
+    if (options.onCallStart !== undefined) {
+      executorOptions.onCallStart = options.onCallStart;
+    }
+    if (options.onCallEnd !== undefined) {
+      executorOptions.onCallEnd = options.onCallEnd;
+    }
+    if (otel) {
+      executorOptions.otel = otel;
+    }
+    this.executor = new Executor(options.tools, executorOptions);
   }
 
   /** Build the dependency graph without executing. */
@@ -63,8 +98,14 @@ export class Orchestrator {
 
   /** Analyze, plan, and execute. Returns a detailed ExecutionReport. */
   async run(calls: ToolCall[]): Promise<ExecutionReport> {
-    const plan = this.plan(calls);
-    return this.executor.execute(plan);
+    const graph = this.analyzer.analyze(calls);
+    const plan = this.planner.plan(graph);
+    const report = await this.executor.execute(plan);
+    if (this.debug) {
+      console.log(this.asciiDag(graph, plan));
+      console.log(this.executionTimeline());
+    }
+    return report;
   }
 
   /**
@@ -73,5 +114,40 @@ export class Orchestrator {
    */
   async runRaw(rawCalls: Record<string, unknown>[]): Promise<ExecutionReport> {
     return this.run(rawCalls as unknown as ToolCall[]);
+  }
+
+  private asciiDag(graph: DependencyGraph, plan: ExecutionPlan): string {
+    const lines = ["\n--- Synapse DAG ---"];
+    for (const stage of plan.stages) {
+      const calls = stage.calls.map((call) => `[${call.id}] ${call.name}`).join(" | ");
+      lines.push(`Stage ${stage.index}: ${calls}`);
+    }
+    lines.push("Edges:");
+    for (const [id, deps] of graph.edges) {
+      if (deps.size === 0) {
+        lines.push(`  ${id} (root)`);
+      } else {
+        for (const dep of deps) {
+          lines.push(`  ${dep} -> ${id}`);
+        }
+      }
+    }
+    return lines.join("\n");
+  }
+
+  private executionTimeline(): string {
+    const lines = ["--- Execution Timeline ---"];
+    for (const event of this.logger.events) {
+      if (!["stage_started", "stage_completed", "tool_started", "tool_completed", "tool_failed", "execution_complete"].includes(event.event)) {
+        continue;
+      }
+      const timestamp = new Date(event.timestamp * 1000).toISOString().slice(11, 23);
+      const stage = event.stageIndex ?? "-";
+      const tool = event.toolId ?? "-";
+      const latency = event.latencyMs !== undefined ? `${event.latencyMs.toFixed(2)}ms` : "-";
+      const error = event.error ? ` error=${event.error}` : "";
+      lines.push(`${timestamp} stage=${stage} tool=${tool} event=${event.event} latency=${latency}${error}`);
+    }
+    return lines.join("\n");
   }
 }

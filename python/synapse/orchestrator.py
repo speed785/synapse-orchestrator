@@ -31,10 +31,12 @@ The Orchestrator wires together:
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Callable, Coroutine
 
 from .dependency_analyzer import DependencyAnalyzer, DependencyGraph, ToolCall
 from .executor import AsyncToolFn, CallResult, ExecutionReport, Executor
+from .observability import OTelIntegration, SynapseLogger
 from .planner import ExecutionPlan, Planner
 
 
@@ -69,10 +71,17 @@ class Orchestrator:
         default_retries: int = 0,
         on_call_start: Callable[[ToolCall], None] | None = None,
         on_call_end: Callable[[CallResult], None] | None = None,
+        logger: SynapseLogger | None = None,
+        enable_json_logs: bool = False,
+        enable_otel: bool = False,
+        debug: bool = False,
     ) -> None:
         self.tools = tools
+        self.debug = debug
+        self.logger = logger or SynapseLogger(enabled=True, emit_json=enable_json_logs)
+        self.otel = OTelIntegration() if enable_otel else None
         self._analyzer = DependencyAnalyzer()
-        self._planner = Planner()
+        self._planner = Planner(logger=self.logger)
         self._executor = Executor(
             tools=tools,
             max_concurrency=max_concurrency,
@@ -80,6 +89,8 @@ class Orchestrator:
             default_retries=default_retries,
             on_call_start=on_call_start,
             on_call_end=on_call_end,
+            logger=self.logger,
+            otel=self.otel,
         )
 
     # ------------------------------------------------------------------
@@ -102,8 +113,15 @@ class Orchestrator:
         Returns an ExecutionReport with per-call results, timing, and
         a speedup estimate (sum of individual durations / wall-clock time).
         """
-        plan = self.plan(calls)
-        return await self._executor.execute(plan)
+        graph = self.analyze(calls)
+        plan = self._planner.plan(graph)
+        report = await self._executor.execute(plan)
+
+        if self.debug:
+            print(self._ascii_dag(graph, plan))
+            print(self._execution_timeline())
+
+        return report
 
     async def run_raw(
         self,
@@ -118,3 +136,39 @@ class Orchestrator:
         """
         calls = [ToolCall(**c) for c in raw_calls]
         return await self.run(calls)
+
+    def _ascii_dag(self, graph: DependencyGraph, plan: ExecutionPlan) -> str:
+        lines = ["\n--- Synapse DAG ---"]
+        for stage in plan.stages:
+            calls = " | ".join(f"[{call.id}] {call.name}" for call in stage.calls)
+            lines.append(f"Stage {stage.index}: {calls}")
+        lines.append("Edges:")
+        for call_id, deps in graph.edges.items():
+            if deps:
+                for dep in sorted(deps):
+                    lines.append(f"  {dep} -> {call_id}")
+            else:
+                lines.append(f"  {call_id} (root)")
+        return "\n".join(lines)
+
+    def _execution_timeline(self) -> str:
+        lines = ["--- Execution Timeline ---"]
+        for event in self.logger.events:
+            if event.event not in {
+                "stage_started",
+                "stage_completed",
+                "tool_started",
+                "tool_completed",
+                "tool_failed",
+                "execution_complete",
+            }:
+                continue
+            timestamp = datetime.fromtimestamp(event.timestamp).strftime("%H:%M:%S.%f")[:-3]
+            stage = "-" if event.stage_index is None else str(event.stage_index)
+            tool = event.tool_id or "-"
+            latency = "-" if event.latency_ms is None else f"{event.latency_ms:.2f}ms"
+            error = f" error={event.error}" if event.error else ""
+            lines.append(
+                f"{timestamp} stage={stage} tool={tool} event={event.event} latency={latency}{error}"
+            )
+        return "\n".join(lines)

@@ -35,6 +35,7 @@ __version__ = "0.1.0"
 
 from .dependency_analyzer import DependencyAnalyzer, DependencyGraph, ToolCall
 from .executor import CallResult, ExecutionReport, Executor
+from .observability import ExecutionMetrics, OTelIntegration, SynapseLogger
 from .orchestrator import Orchestrator
 from .planner import ExecutionPlan, Planner, Stage
 
@@ -53,4 +54,7 @@ __all__ = [
     "Executor",
     "CallResult",
     "ExecutionReport",
+    "SynapseLogger",
+    "ExecutionMetrics",
+    "OTelIntegration",
 ]

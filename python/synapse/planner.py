@@ -29,6 +29,7 @@ from collections import deque
 from dataclasses import dataclass, field
 
 from .dependency_analyzer import DependencyGraph, ToolCall
+from .observability import SynapseLogger
 
 
 @dataclass
@@ -80,6 +81,9 @@ class Planner:
     topological sort (Kahn's algorithm with level tracking).
     """
 
+    def __init__(self, logger: SynapseLogger | None = None) -> None:
+        self.logger = logger
+
     def plan(self, graph: DependencyGraph) -> ExecutionPlan:
         # in_degree: how many unresolved deps each node has
         in_degree: dict[str, int] = {
@@ -121,6 +125,20 @@ class Planner:
         total = len(graph.nodes)
         parallelism = total / len(stages) if stages else 0.0
         critical = self._critical_path(graph)
+        estimated_speedup = (
+            total / len(critical)
+            if critical
+            else 1.0
+        )
+
+        if self.logger is not None:
+            self.logger.log(
+                "dag_planned",
+                parallel_count=max((len(stage.calls) for stage in stages), default=0),
+                stage_count=len(stages),
+                critical_path=critical,
+                estimated_speedup=estimated_speedup,
+            )
 
         return ExecutionPlan(
             stages=stages,

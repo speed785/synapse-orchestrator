@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Coroutine
 
 from .dependency_analyzer import ToolCall
+from .observability import OTelIntegration, SynapseLogger
 from .planner import ExecutionPlan
 
 # ── Type alias for an async tool implementation ───────────────────────────────
@@ -151,6 +152,8 @@ class Executor:
         default_retries: int = 0,
         on_call_start: Callable[[ToolCall], None] | None = None,
         on_call_end: Callable[[CallResult], None] | None = None,
+        logger: SynapseLogger | None = None,
+        otel: OTelIntegration | None = None,
     ) -> None:
         self.tools = tools
         self._semaphore = asyncio.Semaphore(max_concurrency)
@@ -158,6 +161,8 @@ class Executor:
         self.default_retries = default_retries
         self.on_call_start = on_call_start
         self.on_call_end = on_call_end
+        self.logger = logger
+        self.otel = otel
 
     async def execute(self, plan: ExecutionPlan) -> ExecutionReport:
         """Run the full plan and return a detailed ExecutionReport."""
@@ -171,6 +176,19 @@ class Executor:
 
         for stage in plan.stages:
             is_parallel = len(stage.calls) > 1
+            stage_start = time.perf_counter()
+            if self.logger is not None:
+                self.logger.log(
+                    "stage_started",
+                    stage_index=stage.index,
+                    parallel_count=len(stage.calls),
+                    tool_count=len(stage.calls),
+                )
+            stage_span = self.otel.start_span(
+                "synapse.stage",
+                stage_index=stage.index,
+                tool_count=len(stage.calls),
+            ) if self.otel is not None else None
             if is_parallel:
                 parallel_calls += len(stage.calls)
             else:
@@ -178,11 +196,27 @@ class Executor:
 
             stage_results = await asyncio.gather(
                 *[
-                    self._run_call(call, accumulated_results)
+                    self._run_call(call, accumulated_results, stage.index, len(stage.calls))
                     for call in stage.calls
                 ],
                 return_exceptions=False,
             )
+
+            stage_latency_ms = (time.perf_counter() - stage_start) * 1000
+            if self.logger is not None:
+                self.logger.log(
+                    "stage_completed",
+                    stage_index=stage.index,
+                    latency_ms=stage_latency_ms,
+                    parallel_count=len(stage.calls),
+                    tool_count=len(stage.calls),
+                )
+            if self.otel is not None:
+                self.otel.end_span(
+                    stage_span,
+                    ok=all(r.status == "success" for r in stage_results),
+                    error=None,
+                )
 
             for result in stage_results:
                 call_results[result.call_id] = result
@@ -191,6 +225,24 @@ class Executor:
 
         wall_ms = (time.perf_counter() - wall_start) * 1000
         speedup = sum_call_duration / wall_ms if wall_ms > 0 else 1.0
+        avg_parallelism = (
+            plan.total_calls / len(plan.stages)
+            if plan.stages
+            else 0.0
+        )
+
+        if self.logger is not None:
+            self.logger.record_execution(
+                speedup_ratio=speedup,
+                parallelism=avg_parallelism,
+            )
+            self.logger.log(
+                "execution_complete",
+                latency_ms=wall_ms,
+                parallel_count=parallel_calls,
+                total_calls=plan.total_calls,
+                speedup_ratio=speedup,
+            )
 
         return ExecutionReport(
             results=call_results,
@@ -202,10 +254,22 @@ class Executor:
         )
 
     async def _run_call(
-        self, call: ToolCall, accumulated_results: dict[str, Any]
+        self,
+        call: ToolCall,
+        accumulated_results: dict[str, Any],
+        stage_index: int,
+        parallel_count: int,
     ) -> CallResult:
         tool_fn = self.tools.get(call.name)
         if tool_fn is None:
+            if self.logger is not None:
+                self.logger.log(
+                    "tool_failed",
+                    stage_index=stage_index,
+                    tool_id=call.id,
+                    parallel_count=parallel_count,
+                    error=f"No tool registered for '{call.name}'",
+                )
             return CallResult(
                 call_id=call.id,
                 tool_name=call.name,
@@ -223,6 +287,20 @@ class Executor:
         for attempt in range(1, max_attempts + 1):
             if self.on_call_start:
                 self.on_call_start(call)
+            if self.logger is not None:
+                self.logger.log(
+                    "tool_started",
+                    stage_index=stage_index,
+                    tool_id=call.id,
+                    parallel_count=parallel_count,
+                )
+            tool_span = self.otel.start_span(
+                "synapse.tool_call",
+                stage_index=stage_index,
+                tool_id=call.id,
+                tool_name=call.name,
+                attempt=attempt,
+            ) if self.otel is not None else None
             t0 = time.perf_counter()
             try:
                 async with self._semaphore:
@@ -240,15 +318,30 @@ class Executor:
                 )
                 if self.on_call_end:
                     self.on_call_end(result)
+                if self.logger is not None:
+                    self.logger.record_tool_result(latency_ms=duration_ms, failed=False)
+                    self.logger.log(
+                        "tool_completed",
+                        stage_index=stage_index,
+                        tool_id=call.id,
+                        latency_ms=duration_ms,
+                        parallel_count=parallel_count,
+                    )
+                if self.otel is not None:
+                    self.otel.end_span(tool_span, ok=True)
                 return result
             except asyncio.TimeoutError:
                 last_duration_ms = (time.perf_counter() - t0) * 1000
                 last_error = f"Timed out after {timeout}s"
                 last_status = "timeout"
+                if self.otel is not None:
+                    self.otel.end_span(tool_span, ok=False, error=last_error)
             except Exception as exc:  # noqa: BLE001
                 last_duration_ms = (time.perf_counter() - t0) * 1000
                 last_error = str(exc)
                 last_status = "error"
+                if self.otel is not None:
+                    self.otel.end_span(tool_span, ok=False, error=last_error)
 
             if attempt < max_attempts:
                 await asyncio.sleep(0.1 * (2 ** (attempt - 1)))  # back-off
@@ -263,4 +356,15 @@ class Executor:
         )
         if self.on_call_end:
             self.on_call_end(result)
+        if self.logger is not None:
+            self.logger.record_tool_result(latency_ms=last_duration_ms, failed=True)
+            self.logger.log(
+                "tool_failed",
+                stage_index=stage_index,
+                tool_id=call.id,
+                latency_ms=last_duration_ms,
+                parallel_count=parallel_count,
+                error=last_error,
+                status=last_status,
+            )
         return result

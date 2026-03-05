@@ -7,6 +7,7 @@
  */
 
 import type { DependencyGraph, ToolCall } from "./dependencyAnalyzer.js";
+import type { SynapseLogger } from "./observability.js";
 
 /** A set of tool calls that can execute concurrently. */
 export interface Stage {
@@ -26,6 +27,8 @@ export interface ExecutionPlan {
 
 /** Builds an ExecutionPlan from a DependencyGraph. */
 export class Planner {
+  constructor(private logger?: SynapseLogger) {}
+
   plan(graph: DependencyGraph): ExecutionPlan {
     // Compute in-degree for each node
     const inDegree = new Map<string, number>();
@@ -74,6 +77,14 @@ export class Planner {
     const totalCalls = graph.nodes.size;
     const parallelism = stages.length > 0 ? totalCalls / stages.length : 0;
     const criticalPath = this.computeCriticalPath(graph);
+    const estimatedSpeedup = criticalPath.length > 0 ? totalCalls / criticalPath.length : 1;
+
+    this.logger?.log("dag_planned", {
+      parallelCount: Math.max(0, ...stages.map((stage) => stage.calls.length)),
+      stageCount: stages.length,
+      criticalPath,
+      estimatedSpeedup,
+    });
 
     return { stages, totalCalls, parallelism, criticalPath };
   }

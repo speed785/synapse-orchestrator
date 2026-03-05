@@ -17,6 +17,9 @@ export { Planner } from "./planner.js";
 export type { AsyncToolFn, CallResult, ExecutionReport, ExecutorOptions } from "./executor.js";
 export { Executor } from "./executor.js";
 
+export type { LogEvent, SynapseEventName, SpanLike, TracerLike } from "./observability.js";
+export { ExecutionMetrics, SynapseLogger, OTelIntegration } from "./observability.js";
+
 export { SynapseOpenAI } from "./integrations/openai.js";
 export type { SynapseOpenAIOptions } from "./integrations/openai.js";
 export { SynapseAnthropic } from "./integrations/anthropic.js";
