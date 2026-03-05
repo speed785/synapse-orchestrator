@@ -3,11 +3,13 @@
   <h1>synapse</h1>
   <p><strong>Parallel tool execution for AI agents. Auto-detect dependencies, maximize speed.</strong></p>
 
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-  [![TypeScript 5+](https://img.shields.io/badge/TypeScript-5%2B-3178C6)](https://www.typescriptlang.org/)
-  [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
-  [![Coverage: 100%](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](#)
+  [![CI](https://github.com/speed785/synapse-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/speed785/synapse-orchestrator/actions/workflows/ci.yml)
+  [![Coverage](https://codecov.io/gh/speed785/synapse-orchestrator/branch/main/graph/badge.svg)](https://codecov.io/gh/speed785/synapse-orchestrator)
+  [![PyPI](https://img.shields.io/pypi/v/synapse-orchestrator)](https://pypi.org/project/synapse-orchestrator/)
+  [![npm](https://img.shields.io/npm/v/synapse-orchestrator)](https://www.npmjs.com/package/synapse-orchestrator)
+  [![Python](https://img.shields.io/badge/python-3.9+-blue)](https://python.org)
+  [![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue)](https://typescriptlang.org)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
   [Quick Start](#quick-start) · [How It Works](#how-it-works) · [Integrations](#integrations) · [API Reference](#api-reference)
 </div>
