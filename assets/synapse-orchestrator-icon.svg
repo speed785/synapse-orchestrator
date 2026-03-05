@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="so-bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#141414"/>
+      <stop offset="100%" stop-color="#0a0a0a"/>
+    </radialGradient>
+    <filter id="so-glow">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="so-glow-sm">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="so-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0,0 8,3 0,6" fill="#00ff88" opacity="0.7"/>
+    </marker>
+    <marker id="so-arrow-cyan" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0,0 8,3 0,6" fill="#00d4ff" opacity="0.7"/>
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="64" fill="url(#so-bg)"/>
+  
+  <!-- Subtle flow lines in background -->
+  <g opacity="0.04">
+    <path d="M0 180 Q128 160 256 180 Q384 200 512 180" fill="none" stroke="#00d4ff" stroke-width="1"/>
+    <path d="M0 256 Q128 236 256 256 Q384 276 512 256" fill="none" stroke="#00d4ff" stroke-width="1"/>
+    <path d="M0 332 Q128 312 256 332 Q384 352 512 332" fill="none" stroke="#00d4ff" stroke-width="1"/>
+  </g>
+  
+  <!-- DAG Connections (behind nodes) -->
+  <g fill="none" stroke-width="2" opacity="0.6">
+    <!-- Stage 0 to Stage 1 connections (fan-out) -->
+    <path d="M120 180 C170 180 190 140 224 140" stroke="#00ff88" marker-end="url(#so-arrow)"/>
+    <path d="M120 256 C170 256 190 216 224 216" stroke="#00ff88" marker-end="url(#so-arrow)"/>
+    <path d="M120 256 C170 256 190 296 224 296" stroke="#00ff88" marker-end="url(#so-arrow)"/>
+    <path d="M120 332 C170 332 190 372 224 372" stroke="#00ff88" marker-end="url(#so-arrow)"/>
+    
+    <!-- Stage 1 to Stage 2 connections (fan-in) -->
+    <path d="M280 140 C310 140 330 200 360 200" stroke="#00d4ff" marker-end="url(#so-arrow-cyan)"/>
+    <path d="M280 216 C310 216 330 220 360 230" stroke="#00d4ff" marker-end="url(#so-arrow-cyan)"/>
+    <path d="M280 296 C310 296 330 280 360 260" stroke="#00d4ff" marker-end="url(#so-arrow-cyan)"/>
+    <path d="M280 372 C310 372 330 300 360 270" stroke="#00d4ff" marker-end="url(#so-arrow-cyan)"/>
+    
+    <!-- Stage 2 to Stage 3 -->
+    <path d="M408 245 C430 245 440 245 448 245" stroke="#00ff88" stroke-width="2.5" marker-end="url(#so-arrow)"/>
+  </g>
+  
+  <!-- Parallel flow indicator lines -->
+  <g opacity="0.15" stroke="#00d4ff" stroke-width="0.5" stroke-dasharray="4,4">
+    <line x1="232" y1="120" x2="232" y2="392"/>
+    <line x1="368" y1="180" x2="368" y2="290"/>
+  </g>
+  
+  <!-- Stage 0: Entry node -->
+  <g filter="url(#so-glow)">
+    <circle cx="100" cy="180" r="20" fill="#0d1a1a" stroke="#00d4ff" stroke-width="2.5"/>
+    <circle cx="100" cy="256" r="22" fill="#0d1a1a" stroke="#00d4ff" stroke-width="2.5"/>
+    <circle cx="100" cy="332" r="20" fill="#0d1a1a" stroke="#00d4ff" stroke-width="2.5"/>
+  </g>
+  <!-- Node inner dots -->
+  <circle cx="100" cy="180" r="6" fill="#00d4ff" opacity="0.8"/>
+  <circle cx="100" cy="256" r="7" fill="#00d4ff" opacity="0.9"/>
+  <circle cx="100" cy="332" r="6" fill="#00d4ff" opacity="0.8"/>
+  
+  <!-- Stage 1: Parallel wave (4 nodes) -->
+  <g filter="url(#so-glow)">
+    <circle cx="252" cy="140" r="18" fill="#0d1a1a" stroke="#00ff88" stroke-width="2.5"/>
+    <circle cx="252" cy="216" r="18" fill="#0d1a1a" stroke="#00ff88" stroke-width="2.5"/>
+    <circle cx="252" cy="296" r="18" fill="#0d1a1a" stroke="#00ff88" stroke-width="2.5"/>
+    <circle cx="252" cy="372" r="18" fill="#0d1a1a" stroke="#00ff88" stroke-width="2.5"/>
+  </g>
+  <!-- Node inner dots -->
+  <circle cx="252" cy="140" r="6" fill="#00ff88" opacity="0.85"/>
+  <circle cx="252" cy="216" r="6" fill="#00ff88" opacity="0.85"/>
+  <circle cx="252" cy="296" r="6" fill="#00ff88" opacity="0.85"/>
+  <circle cx="252" cy="372" r="6" fill="#00ff88" opacity="0.85"/>
+  
+  <!-- Stage 2: Aggregate node -->
+  <g filter="url(#so-glow)">
+    <circle cx="384" cy="245" r="24" fill="#0d1a1a" stroke="#00d4ff" stroke-width="3"/>
+  </g>
+  <circle cx="384" cy="245" r="9" fill="#00d4ff" opacity="0.9"/>
+  
+  <!-- Stage 3: Output node -->
+  <g filter="url(#so-glow)">
+    <circle cx="464" cy="245" r="18" fill="#0d1a1a" stroke="#00ff88" stroke-width="2.5"/>
+  </g>
+  <circle cx="464" cy="245" r="6" fill="#00ff88" opacity="0.85"/>
+  
+  <!-- Parallel bracket indicators -->
+  <g stroke="#00ff88" stroke-width="1" opacity="0.3" fill="none">
+    <path d="M232 122 L220 122 L220 390 L232 390"/>
+  </g>
+  
+  <!-- Speed lines -->
+  <g stroke="#00ff88" stroke-width="1" opacity="0.1">
+    <line x1="50" y1="180" x2="70" y2="180"/>
+    <line x1="45" y1="256" x2="68" y2="256"/>
+    <line x1="50" y1="332" x2="70" y2="332"/>
+  </g>
+</svg>

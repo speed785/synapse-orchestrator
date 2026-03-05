@@ -1,112 +1,157 @@
-# ⚡ Synapse — Parallel Tool Call Orchestrator
+<div align="center">
+  <img src="assets/synapse-orchestrator-icon.svg" width="120" height="120" alt="synapse-orchestrator" />
+  <h1>synapse</h1>
+  <p><strong>Parallel tool execution for AI agents. Auto-detect dependencies, maximize speed.</strong></p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![TypeScript 5+](https://img.shields.io/badge/TypeScript-5%2B-blue)](https://www.typescriptlang.org/)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+  [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+  [![TypeScript 5+](https://img.shields.io/badge/TypeScript-5%2B-3178C6)](https://www.typescriptlang.org/)
+  [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+  [![Coverage: 100%](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](#)
 
-**Synapse automatically detects data dependencies between AI agent tool calls and executes them with maximum parallelism — dramatically cutting pipeline latency without changing a single line of agent logic.**
+  [Quick Start](#quick-start) · [How It Works](#how-it-works) · [Integrations](#integrations) · [API Reference](#api-reference)
+</div>
 
 ---
 
-## Why Synapse?
+## Why synapse?
 
-Modern AI agents orchestrate dozens of tool calls per request. A naive implementation runs them one at a time:
+Your agent fires four tool calls. Your code runs them one at a time. Two of them don't depend on each other at all — they're just waiting in line.
 
 ```
+# Without synapse — sequential, wasteful
 fetch_user    → 150 ms
-fetch_catalog → 150 ms  ← why wait? it doesn't depend on fetch_user!
+fetch_catalog → 150 ms   ← no reason to wait
 build_cart    → 100 ms
 send_receipt  →  50 ms
-─────────────────────
+─────────────────────────
 Total         → 450 ms
 ```
 
-Synapse analyses the calls, builds a **dependency DAG**, and fires independent ones in parallel:
+Synapse reads the `$results.*` references in your tool inputs, builds a dependency graph, and fires independent calls in parallel. No changes to your agent logic.
 
 ```
-fetch_user ┐
-           ├──(150 ms)──► build_cart → send_receipt
-fetch_catalog ┘
-─────────────────────────────────────────────────────
-Total: 300 ms   →   1.5× speedup on this example
-                    3–10× on real fan-out pipelines
+# With synapse — parallel where possible
+fetch_user ─┐
+            ├── 150 ms ──► build_cart → send_receipt
+fetch_catalog ─┘
+──────────────────────────────────────────────────────
+Total: 310 ms   →   1.45x faster on this pipeline
+       355 ms   →   3.24x faster on 5-way fan-out
+       460 ms   →   4.89x faster on 10-way fan-out
 ```
+
+Zero new dependencies. Pure stdlib asyncio. Drop it in, get the speedup.
 
 ---
 
-## Dependency DAG — visualised
+## How It Works
 
-For the fan-out/fan-in research example (5 parallel fetches):
+Synapse scans your tool call inputs for `$results.<id>` placeholders. Each reference is an edge in a dependency DAG. Calls with no incoming edges run immediately, in parallel. When they finish, their results are injected into the next stage.
 
 ```
-fetch_wikipedia ─┐
-fetch_arxiv     ─┤
-fetch_github    ─┼──► aggregate ──► format_report
-fetch_news      ─┤
-fetch_patents   ─┘
+Your tool calls:
 
-Stage 0 (5 calls in parallel)  →  200 ms
-Stage 1 (1 call)                →  100 ms
-Stage 2 (1 call)                →   50 ms
-──────────────────────────────────────────
-Wall clock: 350 ms   vs   1150 ms sequential   →   3.3× speedup
+  fetch_wikipedia ─┐
+  fetch_arxiv     ─┤
+  fetch_github    ─┼──► aggregate ──► format_report
+  fetch_news      ─┤
+  fetch_patents   ─┘
+
+Synapse execution plan:
+
+  Stage 0  [parallel]   fetch_wikipedia, fetch_arxiv, fetch_github,
+                        fetch_news, fetch_patents          → 200 ms
+  Stage 1  [serial]     aggregate                          → 100 ms
+  Stage 2  [serial]     format_report                      →  50 ms
+                                                    ─────────────────
+                                         Wall clock:        350 ms
+                                         Sequential would:  1150 ms
+                                         Speedup:           3.3x
 ```
+
+The planner is a simple BFS topological sort. No magic, no runtime overhead worth measuring (~5 ms on cold start).
 
 ---
 
-## Quick start — Python
+## Features
+
+- **Auto dependency detection** via `$results.<id>` and `$results.<id>.<path>` placeholders
+- **Explicit ordering** with `depends_on` for semantic dependencies (no data flow needed)
+- **Nested path resolution** — `$results.user.email` extracts deeply nested values automatically
+- **Error propagation** — a failed call marks all downstream calls as skipped, not crashed
+- **Per-call retries and timeouts** on every `ToolCall`
+- **Execution reports** with wall-clock time, per-call durations, and speedup estimate
+- **Observability** via `SynapseLogger` with Prometheus export and OpenTelemetry hooks
+- **OpenAI, Anthropic, LangChain** integrations — drop-in wrappers, no agent rewrite
+- **Python + TypeScript** implementations, same API surface
+- **100% test coverage**
+
+---
+
+## Quick Start
+
+### Python
 
 ```bash
 pip install synapse-orchestrator
-# or with LLM provider extras:
+
+# With LLM provider extras:
 pip install synapse-orchestrator[openai]
 pip install synapse-orchestrator[anthropic]
+pip install synapse-orchestrator[langchain]
 ```
+
+**Before synapse** — four awaits, one at a time:
+
+```python
+user    = await fetch_user(42)
+catalog = await fetch_catalog("widgets")
+cart    = await build_cart(user, catalog)
+receipt = await send_receipt(cart, user["email"])
+# ~450 ms
+```
+
+**After synapse** — same logic, parallel execution:
 
 ```python
 import asyncio
 from synapse import Orchestrator, ToolCall
 
-async def main():
-    orch = Orchestrator(tools={
-        "fetch_user":    fetch_user,
-        "fetch_catalog": fetch_catalog,
-        "build_cart":    build_cart,
-        "send_receipt":  send_receipt,
-    })
+orch = Orchestrator(tools={
+    "fetch_user":    fetch_user,
+    "fetch_catalog": fetch_catalog,
+    "build_cart":    build_cart,
+    "send_receipt":  send_receipt,
+})
 
-    # $results.<id> references tell Synapse about data dependencies.
-    # Independent calls (fetch_user, fetch_catalog) run in parallel automatically.
-    report = await orch.run([
-        ToolCall(id="user",    name="fetch_user",    inputs={"user_id": 42}),
-        ToolCall(id="catalog", name="fetch_catalog", inputs={"category": "widgets"}),
-        ToolCall(id="cart",    name="build_cart",
-                 inputs={"user": "$results.user", "catalog": "$results.catalog"}),
-        ToolCall(id="receipt", name="send_receipt",
-                 inputs={"cart": "$results.cart", "email": "$results.user.email"}),
-    ])
+report = await orch.run([
+    ToolCall(id="user",    name="fetch_user",    inputs={"user_id": 42}),
+    ToolCall(id="catalog", name="fetch_catalog", inputs={"category": "widgets"}),
+    ToolCall(id="cart",    name="build_cart",
+             inputs={"user": "$results.user", "catalog": "$results.catalog"}),
+    ToolCall(id="receipt", name="send_receipt",
+             inputs={"cart": "$results.cart", "email": "$results.user.email"}),
+])
 
-    print(report)
-    # ── Synapse Execution Report ──────────────────────────
-    #   Wall clock : 312 ms
-    #   Stages     : 3
-    #   Parallel   : 2 calls
-    #   Sequential : 2 calls
-    #   Speedup    : 1.46x
-    #   Results:
-    #     ✓ [user]    fetch_user    — success in 151 ms
-    #     ✓ [catalog] fetch_catalog — success in 149 ms
-    #     ✓ [cart]    build_cart    — success in 102 ms
-    #     ✓ [receipt] send_receipt  — success in  51 ms
-    # ─────────────────────────────────────────────────────
-
-asyncio.run(main())
+print(report)
+# ── Synapse Execution Report ──────────────────────────
+#   Wall clock : 312 ms
+#   Stages     : 3
+#   Parallel   : 2 calls
+#   Sequential : 2 calls
+#   Speedup    : 1.46x
+#   Results:
+#     ✓ [user]    fetch_user    — success in 151 ms
+#     ✓ [catalog] fetch_catalog — success in 149 ms
+#     ✓ [cart]    build_cart    — success in 102 ms
+#     ✓ [receipt] send_receipt  — success in  51 ms
+# ─────────────────────────────────────────────────────
 ```
 
----
+`fetch_user` and `fetch_catalog` have no `$results.*` references, so synapse runs them together. `build_cart` references both, so it waits. `send_receipt` references `build_cart`, so it goes last. You wrote the dependency graph by writing normal code.
 
-## Quick start — TypeScript / Node.js
+### TypeScript / Node.js
 
 ```bash
 npm install synapse-orchestrator
@@ -138,9 +183,78 @@ console.log(`Speedup: ${report.speedupEstimate.toFixed(2)}x`);
 
 ---
 
-## OpenAI integration
+## Usage
 
-Drop-in replacement for your OpenAI client. Synapse intercepts tool call responses and parallelises them transparently:
+### Dependency detection
+
+**Implicit** — any `$results.<id>` string in `inputs` creates a dependency edge and gets resolved before the call runs:
+
+```python
+ToolCall(
+    id="summary",
+    name="summarize",
+    inputs={
+        "text":   "$results.fetch_doc",        # depends on fetch_doc
+        "author": "$results.fetch_user.name",  # nested path, auto-resolved
+    }
+)
+```
+
+**Explicit** — use `depends_on` when ordering matters but no data flows between calls:
+
+```python
+ToolCall(
+    id="notify",
+    name="send_notification",
+    depends_on=["write_db", "invalidate_cache"],  # runs after both, no data needed
+    inputs={"message": "Done!"},
+)
+```
+
+### Retries and timeouts
+
+```python
+ToolCall(
+    id="flaky_api",
+    name="call_external_service",
+    inputs={"query": "..."},
+    retries=3,       # retry up to 3 times on exception
+    timeout=5.0,     # cancel after 5 seconds
+)
+```
+
+### Inspect the plan before running
+
+```python
+plan = orch.plan(calls)
+print(plan)
+# Stage 0 (parallel): fetch_wikipedia, fetch_arxiv, fetch_github, fetch_news, fetch_patents
+# Stage 1 (serial):   aggregate
+# Stage 2 (serial):   format_report
+```
+
+### Observability
+
+```python
+from synapse import Orchestrator, SynapseLogger
+
+logger = SynapseLogger(emit_json=True)
+orch = Orchestrator(tools={...}, logger=logger, debug=True)
+
+report = await orch.run(calls)
+print(logger.export_prometheus())
+# synapse_call_duration_ms{tool="fetch_user"} 151.2
+# synapse_call_duration_ms{tool="fetch_catalog"} 149.8
+# synapse_speedup_ratio 1.46
+```
+
+---
+
+## Integrations
+
+### OpenAI
+
+Drop-in replacement for your OpenAI client. Synapse intercepts tool call responses and parallelizes them transparently:
 
 ```python
 from openai import AsyncOpenAI
@@ -160,14 +274,10 @@ response, reports = await client.chat(
     messages=[{"role": "user", "content": "Weather and 5-day forecast for NYC and LA?"}],
     tools=openai_tool_schemas,
 )
-
-# NYC + LA fetched in parallel. Report shows 2× speedup.
-print(reports[0])
+# NYC + LA fetched in parallel. Report shows 2x speedup.
 ```
 
----
-
-## Anthropic integration
+### Anthropic
 
 ```python
 import anthropic
@@ -191,125 +301,135 @@ response, reports = await client.messages(
 )
 ```
 
----
+### LangChain
 
-## Dependency detection
-
-Synapse uses two mechanisms to detect dependencies:
-
-### 1. Implicit — `$results.<id>` placeholders
-
-Any string value inside `inputs` that matches `$results.<call_id>` (or `$results.<call_id>.<path>`) creates an automatic dependency. The placeholder is also resolved to the real value before the call executes.
+Wrap an existing `AgentExecutor` and call `arun_tool_batch` instead of running tools one at a time:
 
 ```python
-ToolCall(
-    id="summary",
-    name="summarize",
-    inputs={
-        "text": "$results.fetch_doc",       # depends on fetch_doc
-        "author": "$results.fetch_user.name",  # nested path resolution
-    }
-)
+from synapse.integrations.langchain import SynapseAgentExecutor
+
+synapse_executor = SynapseAgentExecutor(agent_executor)
+
+report = await synapse_executor.arun_tool_batch([
+    {"id": "search", "name": "search_tool",   "inputs": {"query": "quantum computing"}},
+    {"id": "wiki",   "name": "wikipedia_tool", "inputs": {"query": "fusion energy"}},
+    {"id": "summary","name": "summarize_tool",
+     "inputs": {"a": "$results.search", "b": "$results.wiki"}},
+])
 ```
 
-### 2. Explicit — `depends_on` list
-
-For semantic dependencies (no data flows, but ordering matters):
-
-```python
-ToolCall(
-    id="notify",
-    name="send_notification",
-    depends_on=["write_db", "invalidate_cache"],  # must run after both
-    inputs={"message": "Done!"},
-)
-```
-
----
-
-## API reference
-
-### `Orchestrator`
-
-| Method | Description |
-|--------|-------------|
-| `analyze(calls)` | Build dependency graph without executing. |
-| `plan(calls)` | Build execution plan (staged DAG) without executing. |
-| `run(calls)` | Full pipeline: analyze → plan → execute. Returns `ExecutionReport`. |
-| `run_raw(dicts)` | Same as `run` but accepts plain dicts. |
-
-### `ToolCall`
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `str` | Unique id within the plan. |
-| `name` | `str` | Name of the registered tool function. |
-| `inputs` | `dict` | Arguments passed to the tool. May contain `$results.*` refs. |
-| `depends_on` | `list[str]` | Explicit dependency ids. |
-| `timeout` | `float \| None` | Per-call timeout in seconds. |
-| `retries` | `int` | Number of retries on failure. |
-
-### `ExecutionReport`
-
-| Field | Description |
-|-------|-------------|
-| `results` | `dict[call_id, CallResult]` — per-call status, output, duration. |
-| `total_duration_ms` | Wall-clock time for the entire run. |
-| `stages_run` | Number of stages in the plan. |
-| `parallel_calls` | Calls that ran concurrently with at least one other. |
-| `speedup_estimate` | `sum(durations) / wall_clock` — ≥ 1 means parallelism helped. |
+Synapse auto-adapts LangChain tools via `ainvoke`, `arun`, `invoke`, or `run` — whichever the tool supports.
 
 ---
 
 ## Benchmarks
 
-Measured on a MacBook Pro M3, simulated 150 ms I/O per call.
+Measured on a MacBook Pro M3, simulated 150-200 ms I/O per call.
 
 | Pipeline shape | Sequential | Synapse | Speedup |
-|----------------|-----------|---------|---------|
-| 2 independent → 1 → 1 | 450 ms | 310 ms | 1.45× |
-| 5-way fan-out → aggregate → format | 1150 ms | 355 ms | 3.24× |
-| 10-way fan-out → 2 reduce → 1 merge | 2250 ms | 460 ms | 4.89× |
-| Chain of 6 (no parallelism possible) | 900 ms | 905 ms | 1.00× |
+|---|---|---|---|
+| 2 independent → 1 → 1 | 450 ms | 310 ms | **1.45x** |
+| 5-way fan-out → aggregate → format | 1150 ms | 355 ms | **3.24x** |
+| 10-way fan-out → 2 reduce → 1 merge | 2250 ms | 460 ms | **4.89x** |
+| Chain of 6 (no parallelism possible) | 900 ms | 905 ms | 1.00x |
 
-> **Note:** Speedup scales with the width of your dependency graph.  
-> Purely sequential pipelines see no benefit — Synapse adds ~5 ms overhead.
+Speedup scales with the width of your dependency graph. Purely sequential pipelines see no benefit — synapse adds ~5 ms overhead on cold start.
+
+Run the examples yourself:
+
+```bash
+cd examples
+python parallel_vs_sequential.py
+python fan_out_fan_in.py
+```
 
 ---
 
-## Project structure
+## API Reference
+
+### `Orchestrator`
+
+```python
+Orchestrator(
+    tools: dict[str, AsyncToolFn],
+    on_call_start: Callable[[ToolCall], None] | None = None,
+    on_call_end:   Callable[[CallResult], None] | None = None,
+    logger:        SynapseLogger | None = None,
+    debug:         bool = False,
+)
+```
+
+| Method | Description |
+|---|---|
+| `analyze(calls)` | Build dependency graph without executing. Returns `DependencyGraph`. |
+| `plan(calls)` | Build staged execution plan without executing. Returns `ExecutionPlan`. |
+| `run(calls)` | Analyze, plan, execute. Returns `ExecutionReport`. |
+| `run_raw(dicts)` | Same as `run` but accepts plain dicts instead of `ToolCall` objects. |
+
+### `ToolCall`
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `str` | Unique identifier within the plan. |
+| `name` | `str` | Name of the registered tool function. |
+| `inputs` | `dict` | Arguments passed to the tool. May contain `$results.*` refs. |
+| `depends_on` | `list[str]` | Explicit dependency IDs (for ordering without data flow). |
+| `timeout` | `float \| None` | Per-call timeout in seconds. |
+| `retries` | `int` | Retry count on exception (default: 0). |
+
+### `ExecutionReport`
+
+| Field | Description |
+|---|---|
+| `results` | `dict[call_id, CallResult]` — per-call status, output, duration. |
+| `total_duration_ms` | Wall-clock time for the entire run. |
+| `stages_run` | Number of stages in the execution plan. |
+| `parallel_calls` | Count of calls that ran concurrently with at least one other. |
+| `speedup_estimate` | `sum(durations) / wall_clock` — values above 1.0 mean parallelism helped. |
+
+### `CallResult`
+
+| Field | Description |
+|---|---|
+| `call_id` | The `id` from the original `ToolCall`. |
+| `tool_name` | The `name` from the original `ToolCall`. |
+| `status` | `"success"`, `"error"`, or `"skipped"`. |
+| `output` | Return value of the tool function (or `None` on error/skip). |
+| `error` | Exception instance if `status == "error"`. |
+| `duration_ms` | Time spent executing this call. |
+
+---
+
+## Project Structure
 
 ```
 synapse-orchestrator/
 ├── python/
-│   ├── synapse/
-│   │   ├── __init__.py
-│   │   ├── orchestrator.py        # Top-level entry point
-│   │   ├── dependency_analyzer.py # $results.* detection + explicit deps
-│   │   ├── planner.py             # BFS DAG → staged execution plan
-│   │   ├── executor.py            # asyncio parallel runner, retries, timeouts
-│   │   └── integrations/
-│   │       ├── openai.py          # OpenAI function-calling wrapper
-│   │       └── anthropic.py       # Anthropic tool-use wrapper
-│   ├── setup.py
-│   └── requirements.txt
+│   └── synapse/
+│       ├── orchestrator.py         # Top-level entry point
+│       ├── dependency_analyzer.py  # $results.* detection + explicit deps
+│       ├── planner.py              # BFS topological sort → staged plan
+│       ├── executor.py             # asyncio parallel runner, retries, timeouts
+│       ├── observability.py        # SynapseLogger, Prometheus, OTel
+│       └── integrations/
+│           ├── openai.py           # OpenAI function-calling wrapper
+│           ├── anthropic.py        # Anthropic tool-use wrapper
+│           └── langchain.py        # LangChain AgentExecutor adapter
 │
 ├── typescript/
-│   ├── src/
-│   │   ├── index.ts
-│   │   ├── orchestrator.ts
-│   │   ├── dependencyAnalyzer.ts
-│   │   ├── planner.ts
-│   │   ├── executor.ts            # Promise.all + Semaphore + retries
-│   │   └── integrations/
-│   │       ├── openai.ts
-│   │       └── anthropic.ts
-│   ├── package.json
-│   └── tsconfig.json
+│   └── src/
+│       ├── orchestrator.ts
+│       ├── dependencyAnalyzer.ts
+│       ├── planner.ts
+│       ├── executor.ts             # Promise.all + Semaphore + retries
+│       └── integrations/
+│           ├── openai.ts
+│           └── anthropic.ts
 │
 └── examples/
-    ├── parallel_vs_sequential.py  # Basic 2+2 pipeline comparison
-    └── fan_out_fan_in.py          # 5-source research aggregation
+    ├── parallel_vs_sequential.py   # Basic 2+2 pipeline comparison
+    ├── fan_out_fan_in.py           # 5-source research aggregation (3.3x)
+    └── observability_example.py    # SynapseLogger + Prometheus export
 ```
 
 ---
@@ -318,10 +438,10 @@ synapse-orchestrator/
 
 1. Fork the repo.
 2. Create a branch: `git checkout -b feat/your-feature`.
-3. Make your changes and add tests.
+3. Add your changes and tests.
 4. Submit a pull request.
 
-All contributions welcome — new integrations (LangChain, LlamaIndex, VertexAI…), visualisation tools, async generator support, etc.
+New integrations (LlamaIndex, VertexAI, Bedrock...), visualization tools, async generator support, and streaming are all welcome.
 
 ---
 
