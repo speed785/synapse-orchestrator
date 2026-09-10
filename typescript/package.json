@@ -55,7 +55,7 @@
     "url": "git+https://github.com/speed785/synapse-orchestrator.git"
   },
   "devDependencies": {
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.4.1",
     "typescript": "^5.4.0"
   },
   "peerDependencies": {
